@@ -1,0 +1,19 @@
+tidyverseをインストール
+```{r}
+install.packages("tidyverse")
+```
+ggplot2で可視化確認
+```{r}
+library(ggplot2)
+ggplot(data=iris, mapping=aes(x=Sepal.Length)) +
+  geom_histogram(alpha=0.5, bins=20) +
+  labs(title="histogram")
+```
+ggfortifyをインストール
+```{r}
+install.packages("ggfortify")
+```
+brmsをインストール
+```{r}
+install.packages("brms")
+```

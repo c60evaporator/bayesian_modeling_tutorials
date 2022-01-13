@@ -1,0 +1,118 @@
+足し算
+```{r}
+1+1
+3-1
+3*4
+8/6
+2^10
+```
+変数
+```{r}
+x <- 2
+x + 1
+```
+ベクトル
+```{r}
+vector_1 <- c(1,2,3,4,5)
+vector_1
+vector_2 <- 1:5
+vector_2
+```
+行列
+```{r}
+matrix_1 <- matrix(
+  data=1:10,
+  nrow=2,
+  byrow=TRUE)
+matrix_1
+
+matrix_2 <- cbind(
+  c(1,2),
+  c(3,4))
+colnames(matrix_2) <- c("col1", "col2")
+matrix_2
+```
+配列
+```{r}
+array_1 <- array(data=1:30,
+                 dim=c(3,5,2))
+array_1
+
+array_2 <- array(data=1:4,
+                 dim=c(2,2))
+array_2
+```
+データフレーム
+```{r}
+dataframe_1 <- data.frame(
+  col1=c(1, 2),
+  col2=c(3, 4))
+str(dataframe_1)
+```
+リスト
+```{r}
+list_1 <- list(
+  matrix=matrix_1,
+  df=dataframe_1
+)
+list_1
+```
+データの抽出
+```{r}
+list_1$matrix#Listの抽出は$
+list_1$matrix[2,2]#Matrixの抽出は[]
+list_1$matrix[2,2:4]#Matrixの複数抽出は[:]
+list_1$df$col1#DataFrameの列抽出は$
+list_1$df$col1[2]#ベクトルの抽出は[]
+dim(list_1$matrix)#Matrixの形状取得はdim
+dim(list_1$df)#DataFrameの形状取得はdim
+```
+時系列
+```{r}
+data_frame_ts <- data.frame(data=1:24)
+ts_1 <- ts(
+  data_frame_ts,#元となるDataFrame
+  start=c(2010,1),#開始年月
+  frequency=12#1年におけるデータの下図
+)
+ts_1
+```
+ファイルからデータ読込
+```{r}
+INPUT_PATH <- "../../sample_data/california_housing.csv"
+df <- read.csv(INPUT_PATH, fileEncoding = "UTF-8-BOM")
+str(head(df, n=5))
+```
+乱数の生成
+```{r}
+set.seed(42)
+rnorm(n=5,mean=0,sd=1)
+rnorm(n=5,mean=0,sd=1)
+set.seed(42)
+rnorm(n=5,mean=0,sd=1)
+```
+For文
+```{r}
+set.seed(42)
+for(i in 1:3){
+  print(rnorm(n=1,mean=0,sd=1))
+}
+```
+Forを使ったベクトルの操作
+```{r}
+result_vec_2 <- c(0,0,0)  # 結果保存用ベクトル
+mean_vec <- c(0, 10, -15)  # 平均値保持用ベクトル
+set.seed(42)
+for(i in 1:3){
+  result_vec_2[i] <- rnorm(n=1, mean=mean_vec[i], sd=1)
+}
+result_vec_2
+```
+外部パッケージ読込
+```{r}
+install.packages("tidyverse")
+```
+時系列
+```{r}
+
+```

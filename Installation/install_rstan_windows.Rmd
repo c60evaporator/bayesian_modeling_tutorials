@@ -1,0 +1,63 @@
+RStanのインストール(以下のURLのコピペ)
+https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started-(Japanese)
+
+既存のRStanアンインストール
+```{r}
+remove.packages("rstan")
+if (file.exists(".RData")) file.remove(".RData")
+```
+上記が終わったらRStudio再起動
+
+以下のコマンドでRStanインストール
+```{r}
+install.packages('rstan', repos='https://cloud.r-project.org/', dependencies=TRUE)
+```
+上記が終わったらRStudio再起動
+
+以下のコマンドでC++コンパイラがインストールされているかチェック、インストールされていなければRtoolsをインストールするか聞かれるので、そのままインストールする
+```{r}
+pkgbuild::has_build_tools(debug = TRUE)
+```
+上記が終わったらWindowsとRStudio再起動
+
+以下のコマンドでRStanの起動確認（このコマンドは起動時に毎回実行する必要あり）
+```{r}
+library(rstan) # 起動時のメッセージが表示される
+options(mc.cores = parallel::detectCores()) # マルチコア指定
+```
+メニューの[File]-[New File]-[Stan File]をクリックしてエディタを開き[こちらのリンク](https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started-(Japanese)#%E4%BE%8B-1-eight-schools)にあるStanコードをコピペしてschools.stanとして保存する
+
+以下のコマンドでEight schoolsサンプルデータに対し、保存したStanコードを実行して動作確認
+```{r}
+library(rstan) # 起動時のメッセージが表示される
+options(mc.cores = parallel::detectCores()) # マルチコア指定
+
+# データを入力
+schools_dat <- list(J = 8,
+  y = c(28,  8, -3,  7, -1,  1, 18, 12),
+  sigma = c(15, 10, 16, 11,  9, 11, 10, 18))
+
+# 学習実行(同じフォルダにschool.stanを置く必要あり)
+fit <- stan(file = 'schools.stan', data = schools_dat)
+
+# 結果の表示
+print(fit) # モデル概要
+plot(fit) # 各パラメータの事後分布(MCMCサンプル)箱ひげ
+pairs(fit, pars = c("mu", "tau", "lp__")) # 各パラメータの事後分布(MCMCサンプル)をPairplot
+```
+
+MCMCサンプルを取得
+```{r}
+# MCMCサンプル
+la <- extract(fit, permuted = TRUE) # MCMCサンプルの全パラメータの値をarraysのlistとして返す
+mu <- la$mu # MCMCサンプルのmu(平均値)の値を取得
+
+### iterations, chains, parametersの3次元arrayを返す
+a <- extract(fit, permuted = FALSE)
+a_chains <- a$chains
+
+### stanfitオブジェクトにS3関数を使う
+a2 <- as.array(fit) # MCMCサンプルをArrayとして取得
+m <- as.matrix(fit) # MCMCサンプルをMatrixとして取得
+d <- as.data.frame(fit) # MCMCサンプルをDataFrameとして取得
+```

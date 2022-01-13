@@ -1,0 +1,82 @@
+3-6実装例（分散分析モデル）
+
+分散分析モデルをbrmsで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(brms)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+sales_weather <- read.csv("./sample_data/3-6-1-beer-sales-3.csv")
+ggplot(data=sales_weather, mapping=aes(x=weather, y=sales)) +
+  geom_violin() +
+  geom_point(aes(color=weather)) +
+  labs(title="Relation between weather and sales")
+
+# 分散分析モデル作成
+anova_brms <- brm(
+  formula = sales ~ weather,
+  family = gaussian(),
+  data = sales_weather,
+  seed = 1,
+  prior = c(set_prior("", class = "Intercept"),
+            set_prior("", class = "sigma"))
+)
+
+# 結果の表示
+anova_brms
+```
+各天気での平均値のベイズ信用区間表示
+→以下のパラメータのベイズ信用区間を表示
+　曇りの時: Intercept
+　雨の時: Intercept + weatherrainy
+　晴れの時: Intercept + weathersunny
+```{r}
+eff <- marginal_effects(anova_brms)
+plot(eff, points=FALSE)
+```
+分散分析モデルをStanで実装
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+sales_weather <- read.csv("./sample_data/3-6-1-beer-sales-3.csv")
+ggplot(data=sales_weather, mapping=aes(x=weather, y=sales)) +
+  geom_violin() +
+  geom_point(aes(color=weather)) +
+  labs(title="Relation between weather and sales")
+
+# デザイン行列の作成
+formula_anova <- formula(sales ~ weather)
+design_mat <- model.matrix(formula_anova, sales_weather)
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = nrow(sales_weather),  # データ数
+  K = ncol(design_mat),  # デザイン行列の列数(weatherのユニーク数)
+  Y = sales_weather$sales,  # 応答変数
+  X = design_mat  # デザイン行列
+)
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-4-1-lm-design-matrix.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```

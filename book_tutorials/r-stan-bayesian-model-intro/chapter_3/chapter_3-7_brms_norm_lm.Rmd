@@ -1,0 +1,203 @@
+3-7実装例（正規線形モデル）
+
+正規線形モデルをbrmsで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(brms)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+sales_climate <- read.csv("./sample_data/3-7-1-beer-sales-4.csv")
+ggplot(data=sales_climate, mapping=aes(x=temperature, y=sales)) +
+  geom_point(aes(color=weather)) +
+  labs(title="Relation between climate and sales")
+
+# 分散分析モデル作成
+lm_brms <- brm(
+  formula = sales ~ weather + temperature,
+  family = gaussian(),
+  data = sales_climate,
+  seed = 1,
+  prior = c(set_prior("", class = "Intercept"),
+            set_prior("", class = "sigma"))
+)
+
+# 結果の表示
+lm_brms
+```
+各天気・気温での平均値のベイズ信用区間表示
+```{r}
+eff <- marginal_effects(lm_brms, effects = "temperature:weather")
+plot(eff, points=TRUE)
+```
+各天気・気温でのベイズ予測区間表示
+```{r}
+eff <- marginal_effects(lm_brms, effects = "temperature:weather", method = "predict")
+plot(eff, points=TRUE)
+```
+正規線形モデルをStanで実装
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+sales_climate <- read.csv("./sample_data/3-7-1-beer-sales-4.csv")
+ggplot(data=sales_climate, mapping=aes(x=temperature, y=sales)) +
+  geom_point(aes(color=weather)) +
+  labs(title="Relation between climate and sales")
+
+# デザイン行列の作成
+formula_lm <- formula(sales ~ weather + temperature)
+design_mat <- model.matrix(formula_lm, sales_climate)
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = nrow(sales_climate),  # データ数
+  K = ncol(design_mat),  # デザイン行列の列数(weatherのユニーク数)
+  Y = sales_climate$sales,  # 応答変数
+  X = design_mat  # デザイン行列
+)
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-4-1-lm-design-matrix.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+Stanで実装した正規線形モデルの信用区間を表示
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+mcmc_b <- mcmc_sample$b  # 線形予測子係数のMCMCサンプル
+mcmc_sigma <- mcmc_sample$sigma  # 標準偏差のMCMCサンプル
+
+cat_unique <- sort(unique(sales_climate$weather))  # カテゴリ変数のユニーク値
+mat_colnames <- colnames(design_mat)  # デザイン行列の列名
+
+# 色リスト
+COLOR_LIST = hue_pal()(length(cat_unique))
+# muの信用区間描画用ggplotオブジェクト
+p_mu <- ggplot() +
+  theme_bw(base_size=18)
+# 予測区間描画用ggplotオブジェクト
+p_pred <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_cat in 1:length(cat_unique)){
+  cat_name = cat_unique[i_cat]  # カテゴリ名
+  X_pred <- 5:35  # 描画対象の説明変数範囲（本例では温度）
+  N_X <- length(X_pred)  # 説明変数範囲の要素数
+  N_mcmc <- length(mcmc_sample$lp__)  # MCMCサンプルの個数
+  
+  # 説明変数行列のdataframeを作成(デザイン行列に列を合わせる)
+  for(i_matcol in 1:length(mat_colnames)){
+    # 列を作成
+    colname <- mat_colnames[i_matcol]  # デザイン行列の列名
+    if(colname == "(Intercept)"){
+      # 切片列
+      df_tmp <- data.frame(rep(1, times = 1))
+    } else if(colname == paste("weather",cat_name, sep="")){
+      # 該当するカテゴリ変数列
+      df_tmp <- data.frame(rep(1, times = N_X))
+    } else if(colname == "temperature"){
+      # 数値変数列
+      df_tmp <- data.frame(X_pred)
+    } else{
+      # 該当しないカテゴリ変数列
+      df_tmp <- data.frame(rep(0, times = N_X))
+    }
+    colnames(df_tmp) <- colname
+    
+    if(i_matcol == 1){
+      # 最初の列の時、dataframeを新たに作成
+      df_exp <- df_tmp
+    }else{
+      # 列を追加
+      df_exp <- data.frame(df_exp, df_tmp)
+    }
+  }
+  #print(df_exp)
+  # 平均muと事後予測分布のMCMCサンプルを作成
+  mcmc_mu <- as.data.frame(matrix(nrow=N_mcmc, ncol=N_X))  # muのMCMCサンプル格納用
+  mcmc_y <- as.data.frame(matrix(nrow=N_mcmc, ncol=N_X))  # 予測分布MCMCサンプル格納用
+  for (i in 1:N_X){
+    # 平均muのMCMCサンプル = 線形予測子係数MCMCサンプル * 説明変数行列
+    mcmc_mu[,i] <- mcmc_b %*% t(as.matrix(df_exp[i,]))
+    # 事後予測分布のMCMCサンプルを正規分布乱数から生成
+    mcmc_y[,i] <- rnorm(n=N_mcmc, mean=mcmc_mu[,i], sd=mcmc_sigma)
+  }
+  # mcmc_mu <- mcmc_b %*% t(as.matrix(df_exp))  # muのMCMCサンプルを行列で一括計算
+  
+  # muの50%信用区間と95%信用区間を取得
+  qua_mu <- apply(mcmc_mu,
+                  2,
+                  quantile,
+                  probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+  df_qua_mu <- data.frame(
+    temperature=X_pred,
+    t(qua_mu),
+    check.names = FALSE
+    )
+  # muの信用区間描画用ggplotオブジェクト追加
+  p_mu <- p_mu +
+  geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+              fill=COLOR_LIST[i_cat], alpha=1/4) +
+  geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`25%`, ymax=`75%`),
+              fill=COLOR_LIST[i_cat], alpha=1/2) +
+  geom_line(data=df_qua_mu, aes(x=temperature, y=`50%`),
+            colour=COLOR_LIST[i_cat], size=1)
+  
+  # 50%予測区間と95%予測区間を取得
+  qua_pred <- apply(mcmc_y,
+                    2,
+                    quantile,
+                    probs=c(0.025, 0.25, 0.50, 0.75, 0.975)
+                    )
+  df_qua_pred <- data.frame(
+    temperature=X_pred,
+    t(qua_pred),
+    check.names = FALSE
+    )
+  # 予測区間描画用ggplotオブジェクト追加
+  p_pred <- p_pred +
+  geom_ribbon(data=df_qua_pred, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+              fill=COLOR_LIST[i_cat], alpha=1/6) +
+  geom_ribbon(data=df_qua_pred, aes(x=temperature, ymin=`25%`, ymax=`75%`),
+              fill=COLOR_LIST[i_cat], alpha=1/3) +
+  geom_line(data=df_qua_pred, aes(x=temperature, y=`50%`),
+            colour=COLOR_LIST[i_cat], size=1)
+}
+
+# muの50%信用区間と95%信用区間をプロット
+p_mu <- p_mu +
+  geom_point(data=sales_climate, aes(x=temperature, y=sales, color=weather),
+              shape=1, size=2) +
+  scale_color_manual(values=COLOR_LIST) + 
+  labs(y='sales', title ='Credible interval')
+  p_mu
+  
+# 50%予測区間と95%予測区間をプロット
+p_pred <- p_pred +
+  geom_point(data=sales_climate, aes(x=temperature, y=sales, color=weather),
+              shape=1, size=2) +
+  scale_color_manual(values=COLOR_LIST) + 
+  labs(y='sales', title ='Prediction interval')
+  p_pred
+```
+

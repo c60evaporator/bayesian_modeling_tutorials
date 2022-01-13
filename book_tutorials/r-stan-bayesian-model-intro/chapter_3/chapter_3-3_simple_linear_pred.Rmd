@@ -1,0 +1,140 @@
+3-3実装例（単回帰モデル＋予測分布算出）
+
+事前分布を明示したMCMC
+```{r}
+# パッケージ読込
+library(rstan)
+library(bayesplot)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データ読込
+file_beer_sales_2 <- read.csv("./sample_data/3-2-1-beer-sales-2.csv")
+sample_size <- nrow(file_beer_sales_2) # サンプルサイズ
+sample_size
+
+# 売上と気温の関係図示
+ggplot(file_beer_sales_2, aes(x = temperature, y = sales)) +
+  geom_point() +
+  labs(title ="temperature and sales")
+
+# 事後予測分布算出用説明変数データ（気温11-30度）
+temperature_pred <- 11:30
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = sample_size,
+  sales  = file_beer_sales_2$sales,
+  temperature = file_beer_sales_2$temperature,
+  N_pred = length(temperature_pred),
+  temperature_pred = temperature_pred)
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-3-1-simple-lm-pred.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+トレースプロットと事後分布の可視化
+```{r}
+# MCMCサンプル抽出
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+# トレースプロットと事後分布
+mcmc_combo(
+  mcmc_sample_raw,
+  pars = c("intercept", "beta", "sigma")
+)
+```
+mcmc_intervals関数で予測区間を箱ひげ図で可視化
+```{r}
+# 予測区間を箱ひげ図で可視化
+mcmc_intervals(
+  mcmc_sample_raw,
+  regex_pars = c("sales_pred."), #正規表現で描画対象のパラメータを指定
+  prob = 0.8,  # 太い線の範囲
+  prob_outer = 0.95,  # 細い線の範囲
+)
+```
+予測区間と信用区間を箱ひげ図で比較
+```{r}
+# 予測区間と信用区間を箱ひげ図で比較
+mcmc_intervals(
+  mcmc_sample_raw,
+  pars = c("mu_pred[1]", "sales_pred[1]"),  # 気温11度のときの予測区間と信用区間を比較
+  prob = 0.8,  # 太い線の範囲
+  prob_outer = 0.95,  # 細い線の範囲
+)
+```
+予測分布をヒストグラムで可視化
+```{r}
+# 予測分布をヒストグラムで可視化
+mcmc_areas(
+  mcmc_sample_raw,
+  pars = c("sales_pred[1]", "sales_pred[20]"),  # 気温11度と30度のときを比較
+  prob = 0.6,  # 太い線の範囲
+  prob_outer = 0.99,  # 細い線の範囲
+)
+```
+信用区間を散布図上に表示
+```{r}
+# muの50%信用区間と95%信用区間を取得
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+qua_mu <- apply(mcmc_sample$mu_pred,
+                2,
+                quantile,
+                probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+df_qua_mu <- data.frame(
+  temperature=temperature_pred,
+  t(qua_mu),
+  check.names = FALSE
+  )
+# muの50%信用区間と95%信用区間をプロット
+ggplot() +
+  theme_bw(base_size=18) +
+  geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+              fill='black', alpha=1/6) +
+  geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`25%`, ymax=`75%`),
+              fill='black', alpha=2/6) +
+  geom_line(data=df_qua_mu, aes(x=temperature, y=`50%`), size=1) +
+  geom_point(data=file_beer_sales_2, aes(x=temperature, y=sales),
+             shape=1, size=3) +
+  labs(y='sales', title ='Credible interval')
+```
+予測区間を散布図上に表示
+```{r}
+# 50%予測区間と95%予測区間を取得
+qua_sales <- apply(mcmc_sample$sales_pred,
+                   2,
+                   quantile,
+                   probs=c(0.025, 0.25, 0.50, 0.75, 0.975)
+                   )
+df_qua_sales <- data.frame(temperature=temperature_pred,
+                           t(qua_sales),
+                           check.names = FALSE)
+# 50%予測区間と95%予測区間をプロット
+ggplot() +  
+  theme_bw(base_size=18) +
+  geom_ribbon(data=df_qua_sales,
+              aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+              fill='black',
+              alpha=1/6) +
+  geom_ribbon(data=df_qua_sales,
+              aes(x=temperature, ymin=`25%`, ymax=`75%`),
+              fill='black',
+              alpha=2/6) +
+  geom_line(data=df_qua_sales, aes(x=temperature, y=`50%`), size=1) +
+  geom_point(data=file_beer_sales_2, aes(x=temperature, y=sales), shape=1, size=3) +
+  labs(y='sales', 'Prediction interval')
+```
+
+
+

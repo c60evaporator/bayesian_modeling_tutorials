@@ -1,0 +1,72 @@
+#参考サイトhttps://qiita.com/Miyabi1456/items/d6d3b0a917a5809b82c5#21-%E3%83%A1%E3%83%88%E3%83%AD%E3%83%9D%E3%83%AA%E3%82%B9%E3%83%98%E3%82%A4%E3%82%B9%E3%83%86%E3%82%A3%E3%83%B3%E3%82%B0%E3%82%B9%E6%B3%95mh%E6%B3%95
+
+最尤推定
+```{r}
+set.seed(1) # 乱数の種
+MU_TRUE = 5.0  # 真の平均
+S_TRUE = 1.0  # 真の標準偏差
+N = 10  # データの個数
+x = rnorm(n=N,mean=MU_TRUE,sd=S_TRUE)  # 観測データ生成
+
+# パラメータmuが与えられたときの確率密度関数
+f_pdf <- function(x_, mu){
+  pdf = 1.0/sqrt(2.0*pi) * exp(-(x_-mu)^2 / 2.0)
+  return(pdf)
+}
+
+# 最尤推定
+mu_range = seq(-5, 15, length = 1000)  # パラメータmuの候補値リスト
+f_D = 1.0  # 尤度関数
+for(x_ in x){
+  f_D = f_D * f_pdf(x_, mu_range) # 尤度関数を計算
+}
+# 尤度関数をDataFrameに格納
+df_lh <- data.frame(
+            mu=mu_range,
+            f_D=f_D)
+mu_argmax <- df_lh$mu[which.max(df_lh$f_D)]  # 尤度が最大となるmu（最尤推定）
+# 最尤推定結果をグラフ描画
+library(ggplot2)
+ggplot(data=df_lh, mapping=aes(x=mu, y=log(f_D))) +
+  geom_line(alpha=0.5) +
+  geom_vline(xintercept=mu_argmax, colour="blue", linetype = "longdash") +  # 尤度が最大となるmu
+  labs(title="対数尤度") +
+  theme_gray (base_family = "HiraKakuPro-W3")  # 文字化け防止
+```
+
+ベイズ推定
+```{r}
+S_PRIOR = 20000.0  # 事前分布の標準偏差(大きな値をとる)
+f_mu_prior = 1.0/sqrt(S_PRIOR*pi) * exp(-mu_range^2 / S_PRIOR) #事前分布
+f_mu_post = f_mu_prior * f_D #(事前分布)×(尤度)
+f_mu_post = f_mu_post / sum(f_mu_post) #積分値を1にする
+# 事前分布と事後分布をDataFrameに格納
+df_bayes <- data.frame(
+            mu=mu_range,
+            f_mu_prior=f_mu_prior,
+            f_mu_post = f_mu_post)
+# 事前分布と事後分布を可視化
+ggplot(data=df_bayes, mapping=aes(x=mu)) +
+  geom_line(aes(y=f_mu_prior, colour = "prior")) +
+  geom_line(aes(y=f_mu_post, colour = "post")) +
+  labs(title="ベイズ推定結果") +
+  theme_gray (base_family = "HiraKakuPro-W3")  # 文字化け防止
+```
+
+メトロポリス・ヘイスティングス法 (MH法)によるベイズ推定
+```{r}
+THETA = 1.0  # 推定したい平均値muの初期値（適当に決める）
+ITER = 50000  # MH法でサンプリングする個数
+S_SAMPLINGS = c(1, 0.1, 0.01)  # 提案分布の標準偏差（この値で収束が左右される）
+#(事前分布)×(尤度)を求める関数
+posterior_dist <- function(mu){
+  prior = 1.0/sqrt(S_PRIOR*pi) * exp(-mu^2/S_PRIOR)  # 事前分布
+  lh = prod(f_pdf(x, mu))  # 尤度
+  return(before * lh)
+}
+# MH法でサンプリングする関数
+mh_sumpling <- function(N, s){
+  rand_list = []
+}
+  
+```

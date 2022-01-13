@@ -1,0 +1,81 @@
+2-4実装例（シンプルな正規分布モデルからのデータ生成）
+
+MCMCでパラメータの事後確率分布算出
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データ読込
+file_beer_sales_1 <- read.csv("./sample_data/2-4-1-beer-sales-1.csv")
+sample_size <- nrow(file_beer_sales_1) # サンプルサイズ
+sample_size
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(sales  = file_beer_sales_1$sales, N = sample_size)
+data_list
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/2-4-1-calc-mean-variance.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+```
+推定結果を確認
+
+見方) 
+列:パラメータ事後分布（信用区間）関係の統計値
+行:各パラメータ（lp__は対数事後確率→収束判断に使用）
+　　　　平均    標準  標準  　信用   中央   信用 実効MCMC　Rhat
+                誤差  偏差  区間下   値   区間上 サンプル数 (<1.1なら収束)
+                                                (>100が必要)
+         mean se_mean   sd    2.5%     50%   97.5% n_eff Rhat
+mu     102.17    0.03 1.84   98.44  102.20  105.72  3140    1 ←平均値
+sigma   18.20    0.02 1.27   15.90   18.13   20.96  3086    1 ←標準偏差
+lp__  -336.43    0.02 0.98 -339.01 -336.10 -335.48  1627    1 ←対数事後確率
+```{r}
+print(
+  mcmc_result,                  # MCMCの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+収束の確認
+```{r}
+# トレースプロット（バーンイン期間なし）
+traceplot(mcmc_result) +
+  labs(title="Without warmup")
+# トレースプロット（バーンイン期間あり）
+traceplot(mcmc_result, inc_warmup=T) +
+  labs(title="Including warmup")
+```
+ベクトル化の比較
+```{r}
+# MCMC実行（ベクトル化）
+mcmc_result_vector <- stan(
+  file = "./stan/2-4-2-calc-mean-variance-vec.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+# 結果表示（ベクトル化なし）
+print(
+  mcmc_result,                  # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+# 結果表示（ベクトル化あり）
+print(
+  mcmc_result_vector,                  # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```

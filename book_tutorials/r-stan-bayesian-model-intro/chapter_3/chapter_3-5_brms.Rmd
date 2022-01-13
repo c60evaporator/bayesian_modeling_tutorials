@@ -1,0 +1,126 @@
+3-5実装例（単回帰モデルをbrmsで実装）
+
+単回帰モデルをbrmsで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(brms)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データ読込
+file_beer_sales_2 <- read.csv("./sample_data/3-2-1-beer-sales-2.csv")
+
+# brmsでモデル定義（単回帰モデル）
+simple_lm_brms <- brm(
+  formula = sales ~ temperature,  # 線形予測子（「説明変数 ~ 応答変数」の記法）
+  family = gaussian(link = "identity"),  # 確率分布(link = リンク関数)
+  data = file_beer_sales_2,  # データ
+  seed = 1   # 乱数の種
+)
+
+# 結果の表示
+simple_lm_brms
+```
+トレースプロットと事後分布の図示
+```{r}
+# トレースプロットと事後分布の図示
+plot(simple_lm_brms)
+```
+単回帰モデルをbrmsで実装（formula別指定＆各MCMC引数を明示的に指定）
+```{r}
+# formulaをbf関数で作成
+formula <- bf(sales ~ temperature)
+# brmsでモデル定義（単回帰モデル）
+simple_lm_brms_bf <- brm(
+  formula = formula,  # 線形予測子（「応答変数 ~ 説明変数」の記法）
+  family = gaussian(link = "identity"),  # 確率分布(link = リンク関数)
+  data = file_beer_sales_2,  # データ
+  seed = 1,  # 乱数の種
+  chains = 4,  # チェーン数
+  iter = 2000,  # 乱数生成の繰り返し数
+  warmup = 1000,  # バーンイン期間
+  thin = 1  # 間引き数（1なら間引きなし）
+)
+
+# 結果の表示
+simple_lm_brms_bf
+
+# トレースプロットと事後分布の図示
+plot(simple_lm_brms_bf)
+```
+事前分布を指定
+```{r}
+# brmsでモデル定義（単回帰モデル＋正規分布の事前分布）
+simple_lm_brms_prior <- brm(
+  formula = sales ~ temperature,  # 線形予測子（「説明変数 ~ 応答変数」の記法）
+  family = gaussian(link = "identity"),  # 確率分布(link = リンク関数)
+  data = file_beer_sales_2,  # データ
+  seed = 1,  # 乱数の種
+  prior = c(set_prior("normal(0, 100000)", class = "b", coef = "temperature"),
+            set_prior("normal(0, 100000)", class = "Intercept"),
+            set_prior("normal(0, 100000)", class = "sigma"))
+)
+
+# 結果の表示
+simple_lm_brms_prior
+
+# トレースプロットと事後分布の図示
+plot(simple_lm_brms_prior)
+```
+生成されたStanコードとデータの確認
+```{r}
+# Stanコードの確認
+stancode(simple_lm_brms_prior)
+# Stanデータの確認
+standata(simple_lm_brms_prior)
+```
+ベイズ信用区間の可視化
+```{r}
+stanplot(simple_lm_brms_prior,
+         type = "intervals",  # グラフの種類（箱ひげ図）
+         pars = "^b_",  # `b`から始まるパラメータ
+         prob = 0.8,  # 太い線の範囲
+         prob_outer = 0.95  # 細い線の範囲
+         )
+```
+信用区間、予測区間の算出
+```{r}
+# 区間推定時の説明変数の値
+df_pred <- data.frame(temperature = c(10, 15, 20, 25, 30))
+# 信用区間
+fitted(simple_lm_brms_prior, df_pred)
+# 予測区間
+set.seed(1)
+predict(simple_lm_brms_prior, df_pred)
+```
+MCMCサンプルから予測区間を算出（predict関数不使用）
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample_brms <- as.mcmc(simple_lm_brms, combine_chains = TRUE)
+# パラメータごとのMCMCサンプルを保持
+mcmc_b_Intercept <- mcmc_sample_brms[,"b_Intercept"]
+mcmc_b_temperature <- mcmc_sample_brms[,"b_temperature"]
+mcmc_sigma <- mcmc_sample_brms[,"sigma"]
+
+# 平均muのMCMCサンプル
+saigen_fitted <- mcmc_b_Intercept + 20 * mcmc_b_temperature
+# 事後予測分布のMCMCサンプルを得る
+set.seed(1)
+saigen_predict <- do.call(
+  rnorm,
+  c(4000, list(mean = saigen_fitted, sd = mcmc_sigma))
+)
+quantile(saigen_predict, probs = c(0.025, 0.975))
+```
+回帰直線のプロット
+```{r}
+# 回帰直線プロット with 95%信用区間
+eff <- marginal_effects(simple_lm_brms)
+plot(eff, points = TRUE)
+# 回帰直線プロット with 95%信用区間
+eff <- marginal_effects(simple_lm_brms, method = "predict")
+plot(eff, points = TRUE)
+```

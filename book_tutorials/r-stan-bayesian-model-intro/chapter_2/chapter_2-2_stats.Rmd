@@ -1,0 +1,63 @@
+Chapter2-2 データの要約
+分布ヒストグラム
+```{r}
+INPUT_PATH <- "./sample_data/california_housing.csv"
+df <- read.csv(INPUT_PATH, fileEncoding = "UTF-8-BOM")
+hist(df$price)
+```
+カーネル密度推定
+```{r}
+kernel_density <- density(df$price)
+plot(kernel_density)
+```
+カーネル密度推定（バンド幅変更）
+```{r}
+# バンド幅をadjust値に変更
+kernel_density_quarter <- density(df$price, adjust=0.25)
+kernel_density_quadruple <- density(df$price, adjust=4)
+# 結果の可視化
+plot(kernel_density,
+     lwd=2,  # メインの線の太さ
+     xlab="",  # x軸のラベル名称を削除
+     ylim=c(0, 0.6),  # y軸の範囲
+     main="change band width"  # グラフのタイトル
+     )
+lines(kernel_density_quarter, col=2)
+lines(kernel_density_quadruple, col=4)
+```
+平均、標準偏差、最大、最小
+```{r}
+mean(df$price)
+sd(df$price)
+max(df$price)
+min(df$price)
+```
+メディアン、四分位点、パーセント点
+```{r}
+suuretu <- 0:1000
+length(suuretu)
+median(suuretu)
+quantile(suuretu, probs=c(0.025, 0.25, 0.5, 0.75, 0.975))
+```
+相関係数
+```{r}
+cor(df$MedInc, df$price)
+```
+自己相関コレログラム
+```{r}
+Nile  # ナイル川流量データ
+# 5次までの自己共分散を計算
+acf(
+  Nile,
+  type="covariance",
+  plot=F,
+  lag.max=5
+)
+# 5次までの自己相関係数を計算
+acf(
+  Nile,
+  plot=F,
+  lag.max=5
+)
+acf(Nile)
+```

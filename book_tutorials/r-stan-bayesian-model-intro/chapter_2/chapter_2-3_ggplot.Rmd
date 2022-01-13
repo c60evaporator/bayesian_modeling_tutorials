@@ -1,0 +1,80 @@
+Chapter2-3 ggplot2によるデータの可視化
+
+ヒストグラム
+```{r}
+# サンプルデータ読込
+library(ggplot2)
+INPUT_PATH <- "../../../sample_data/california_housing.csv"
+df <- read.csv(INPUT_PATH, fileEncoding = "UTF-8-BOM")
+# ヒストグラム描画
+ggplot(data=df, mapping=aes(x=price)) +
+  geom_histogram(alpha=0.5, bins=20) +
+  labs(title="histogram")
+```
+
+カーネル密度推定
+```{r}
+ggplot(data=df, mapping=aes(x=price)) +
+  geom_density(size=1.5) +
+  labs(title="kernel density")
+```
+
+グラフの重ね合わせ
+```{r}
+ggplot(data=df, mapping=aes(x=price, y=..density..)) +
+  geom_histogram(alpha=0.5, bins=20) +
+  geom_density(size=1.5) +
+  labs(title="histogram")
+```
+
+グラフの一覧表示
+```{r}
+library(gridExtra)
+
+p_hist <- ggplot(data=df, mapping=aes(x=price)) +
+  geom_histogram(alpha=0.5, bins=20) +
+  labs(title="histogram")
+
+p_density <- ggplot(data=df, mapping=aes(x=price)) +
+  geom_density(size=1.5) +
+  labs(title="kernel density")
+
+grid.arrange(p_hist, p_density, ncol=2)
+```
+
+箱ひげ図とバイオリンプロット
+```{r}
+# 箱ひげ図
+p_box <- ggplot(data=iris,
+                mapping=aes(x=Species, y=Petal.Length))+
+  geom_boxplot()+
+  labs(title="box")
+# バイオリンプロット
+p_violin <- ggplot(data=iris,
+                mapping=aes(x=Species, y=Petal.Length))+
+  geom_violin()+
+  labs(title="violin")
+grid.arrange(p_box, p_violin, ncol=2)
+```
+
+折れ線
+```{r}
+nile_data_frame <- data.frame(
+  year = 1871:1970,
+  Nile = as.numeric(Nile)
+)
+ggplot(data=nile_data_frame,
+  mapping=aes(x=year, y=Nile))+
+  geom_line()
+```
+
+GGPairs
+```{r}
+library(ggplot2)
+library(GGally)
+p<-ggpairs(df)
+p
+```
+
+
+

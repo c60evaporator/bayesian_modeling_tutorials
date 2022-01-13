@@ -1,0 +1,165 @@
+2-5実装例（シンプルな正規分布モデルからのデータ生成）
+
+MCMCでパラメータの事後確率分布算出(2-4と同じ)
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データ読込
+file_beer_sales_1 <- read.csv("./sample_data/2-4-1-beer-sales-1.csv")
+sample_size <- nrow(file_beer_sales_1) # サンプルサイズ
+sample_size
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(sales  = file_beer_sales_1$sales, N = sample_size)
+data_list
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/2-4-1-calc-mean-variance.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+```
+MCMCサンプルの抽出
+(`permuted=FALSE`でMCMCサンプルの並び順保持)
+```{r}
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+dim(mcmc_sample_raw)  # MCMCサンプルの要素数（iter-warmup × chains x パラメータ数）
+dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
+```
+1回目チェーンのMCMCサンプルのmuパラメータの値を最初から100個表示
+```{r}
+mcmc_sample_raw[1:100,"chain:1","mu"]
+```
+パラメータmuの4つのチェーンをまとめて取得
+```{r}
+length(mcmc_sample_raw[,,"mu"])  # すべてのチェーンのサンプル数
+dim(mcmc_sample_raw[,,"mu"])  # 次元数
+class(mcmc_sample_raw[,,"mu"])  # matrixクラスであることを確認
+# ベクトル化
+mu_mcmc_vec <- as.vector(mcmc_sample_raw[,,"mu"])
+```
+パラメータmuのMCMCサンプル代表値の計算
+```{r}
+median(mu_mcmc_vec)  # 事後中央値
+mean(mu_mcmc_vec)  # 事後期待値
+quantile(mu_mcmc_vec, probs = c(0.025, 0.975))  # 95%ベイズ信用区間
+```
+ggfotifyパッケージでMCMCサンプルからトレースプロット描画
+```{r}
+library(ggfortify)
+autoplot(ts(mcmc_sample_raw[,,"mu"]),
+         facets = F,
+         ylab = "mu",
+         main = "trace plot")
+```
+ggplot2パッケージで事後分布のカーネル密度推定描画
+```{r}
+# データの整形
+mu_df <- data.frame(
+  mu_mcmc_sample = mu_mcmc_vec
+)
+# 図示
+ggplot(data=mu_df, mapping=aes(x=mu_mcmc_sample)) +
+  geom_density(size=1.5)
+```
+bayesplotによる事後分布の可視化
+```{r}
+library(bayesplot)
+# ヒストグラム描画
+mcmc_hist(mcmc_sample_raw, pars = c("mu", "sigma"))
+# カーネル密度推定
+mcmc_dens(mcmc_sample_raw, pars = c("mu", "sigma"))
+# トレースプロット
+mcmc_trace(mcmc_sample_raw, pars = c("mu", "sigma"))
+# トレースプロット＆カーネル密度推定一括表示
+mcmc_combo(mcmc_sample_raw, pars = c("mu", "sigma"))
+```
+bayesplotによる事後分布の範囲表示
+```{r}
+# 事後分布の範囲
+mcmc_intervals(
+  mcmc_sample_raw, pars = c("mu", "sigma"),
+  prob = 0.8,  # 太い線の範囲
+  prob_outer = 0.95  # 細い線の範囲
+)
+# 事後分布の範囲＆カーネル密度推定一括表示
+mcmc_areas(
+  mcmc_sample_raw, pars = c("mu", "sigma"),
+  prob = 0.8,  # 薄い青色で塗られた範囲
+  prob_outer = 0.95  # 細い線が描画される範囲
+)
+```
+bayesplotによるMCMCサンプル自己相関の評価
+```{r}
+mcmc_acf_bar(mcmc_sample_raw, pars = c("mu", "sigma"))
+```
+
+事後予測チェック
+
+MCMCでパラメータの事後確率分布と予測分布算出
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データ読込
+animal_num <- read.csv("./sample_data/2-5-1-animal-num.csv")
+sample_size <- nrow(animal_num) # サンプルサイズ
+sample_size
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(animal_num  = animal_num$animal_num, N = sample_size)
+data_list
+
+# MCMC実行（正規分布）
+mcmc_normal <- stan(
+  file = "./stan/2-5-1-normal-dist.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1          # 乱数シード
+)
+
+# MCMC実行（ポアソン分布）
+mcmc_poisson <- stan(
+  file = "./stan/2-5-2-poisson-dist.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1          # 乱数シード
+)
+```
+事後予測分布のMCMCサンプル取得
+```{r}
+# 事後予測分布のMCMCサンプル取得
+y_rep_normal <- rstan::extract(mcmc_normal)$pred
+y_rep_poisson <- rstan::extract(mcmc_poisson)$pred
+```
+bayesplotのppc_hist関数で事後予測分布をプロット
+```{r}
+library(bayesplot)
+# 正規分布モデルの事後予測分布
+ppc_hist(y = animal_num$animal_num,
+         yrep = y_rep_normal[1:5,])
+# ポアソン分布モデルの事後予測分布
+ppc_hist(y = animal_num$animal_num,
+         yrep = y_rep_poisson[1:5,])
+```
+bayesplotのppc_dens関数で事後予測分布のカーネル密度推定をプロット
+```{r}
+# 正規分布モデルの事後予測分布
+ppc_dens(y = animal_num$animal_num,
+         yrep = y_rep_normal[1:5,])
+# ポアソン分布モデルの事後予測分布
+ppc_dens(y = animal_num$animal_num,
+         yrep = y_rep_poisson[1:5,])
+```

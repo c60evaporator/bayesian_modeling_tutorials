@@ -1,0 +1,51 @@
+3-2実装例（単回帰モデル）
+
+事前分布を明示したMCMC
+```{r}
+# パッケージ読込
+library(rstan)
+library(bayesplot)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データ読込
+file_beer_sales_2 <- read.csv("./sample_data/3-2-1-beer-sales-2.csv")
+sample_size <- nrow(file_beer_sales_2) # サンプルサイズ
+sample_size
+
+# 売上と気温の関係図示
+ggplot(file_beer_sales_2, aes(x = temperature, y = sales)) +
+  geom_point() +
+  labs(title ="temperature and sales")
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = sample_size,
+  sales  = file_beer_sales_2$sales,
+  temperature = file_beer_sales_2$temperature)
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-2-1-simple-lm.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+トレースプロットと事後分布の可視化
+```{r}
+# MCMCサンプル抽出
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+# トレースプロットと事後分布
+mcmc_combo(
+  mcmc_sample_raw,
+  pars = c("intercept", "beta", "sigma")
+)
+```

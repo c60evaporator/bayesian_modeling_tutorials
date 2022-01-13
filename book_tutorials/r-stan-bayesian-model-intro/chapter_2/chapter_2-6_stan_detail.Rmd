@@ -1,0 +1,111 @@
+2-6実装例（Stanコーディングの詳細）
+
+事前分布を明示したMCMC
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データ読込
+file_beer_sales_1 <- read.csv("./sample_data/2-4-1-beer-sales-1.csv")
+sample_size <- nrow(file_beer_sales_1) # サンプルサイズ
+sample_size
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(sales  = file_beer_sales_1$sales, N = sample_size)
+data_list
+
+# MCMC実行（事前分布なし）
+mcmc_without_prior <- stan(
+  file = "./stan/2-4-1-calc-mean-variance.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+
+# MCMC実行（事前分布あり）
+mcmc_prior <- stan(
+  file = "./stan/2-6-1-normal-prior.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+
+# 結果の表示（事前分布なし）
+print(
+  mcmc_without_prior,                  # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+# 結果の表示（事前分布あり）
+print(
+  mcmc_prior,                  # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+対数密度加算文
+```{r}
+# MCMC実行（事前分布あり、対数密度加算文）
+mcmc_prior_lp <- stan(
+  file = "./stan/2-6-3-lp-normal-prior.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+# 結果の表示（事前分布あり）
+print(
+  mcmc_prior,                  # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+# 結果の表示（事前分布あり、対数密度加算文）
+print(
+  mcmc_prior_lp,                  # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+平均値の差の評価（平均値の差の事後分布）
+```{r}
+# データ読込
+file_beer_sales_ab <- read.csv("./sample_data/2-6-1-beer-sales-ab.csv")
+# データのヒストグラム表示（2種類のビールの売上）
+ggplot(data = file_beer_sales_ab,
+       mapping = aes(x = sales, y = ..density..,
+                     color = beer_name, fill = beer_name)) +
+  geom_histogram(alpha = 0.5, position = "identity") +
+  geom_density(alpha = 0.5, size = 0)
+# ビールの種類毎にデータを分ける
+sales_a <- file_beer_sales_ab$sales[1:100]
+sales_b <- file_beer_sales_ab$sales[101:200]
+# listにまとめる
+data_list_ab <- list(
+  sales_a = sales_a,
+  sales_b = sales_b,
+  N = 100
+)
+
+# MCMC実行
+mcmc_result_6 <- stan(
+  file = "./stan/2-6-5-difference-mean.stan", # stanファイルのパス
+  data = data_list_ab, # 対象データ
+  seed = 1             # 乱数シード
+)
+# 結果の表示
+print(
+  mcmc_result_6,                # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+# 平均値の差の事後分布を可視化
+mcmc_sample_raw_6 <- rstan::extract(mcmc_result_6, permuted = FALSE)
+mcmc_dens(mcmc_sample_raw_6, pars = "diff")
+```

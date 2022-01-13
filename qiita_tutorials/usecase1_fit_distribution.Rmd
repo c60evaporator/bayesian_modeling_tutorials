@@ -1,0 +1,156 @@
+ユースケース1: 確率分布の当てはめ
+
+手順1. 確率モデルの構築
+ヒストグラム描画
+```{r}
+# データ読込（irisデータセットのsepal_width）
+sepal_width <- iris$Sepal.Width
+# ヒストグラム描画
+hist(sepal_width)
+```
+シャピロウィルク検定
+```{r}
+# シャピロウィルク検定
+shapiro.test(x=sepal_width)
+```
+手順2. MCMCでパラメータの事後確率分布算出
+
+2-1: MCMC実行
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+N <- nrow(iris)  # データ数
+data_list <- list(sepal_width = iris$Sepal.Width, N = N)
+data_list
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/usecase1_fit_distribution.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+```
+2-2: モデルの概要確認
+
+見方) 
+列:パラメータ事後分布（信用区間）関係の統計値
+行:各パラメータ（lp__は対数事後確率→収束判断に使用）
+　　　平均   標準  標準  信用  中央 信用 実効MCMC   Rhat
+             誤差  偏差  区間下 値 区間上 サンプル数 (<1.1なら収束)
+                                        (>100が必要)
+       mean se_mean   sd  2.5%   50% 97.5% n_eff Rhat
+mu     3.06    0.00 0.04  2.99  3.06  3.12  3714    1 ←平均値
+sigma  0.44    0.00 0.03  0.39  0.44  0.49  3602    1 ←標準偏差
+lp__  48.24    0.02 1.00 45.64 48.53 49.21  1837    1 ←対数事後確率
+```{r}
+options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
+print(
+  mcmc_result,                  # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+手順3: モデルの評価
+
+3-1: トレースプロットによる収束確認
+```{r}
+# トレースプロット（バーンイン期間なし）
+traceplot(mcmc_result, pars = c("mu", "sigma", "lp__")) +
+  labs(title="Without warmup")
+# トレースプロット（バーンイン期間あり）
+traceplot(mcmc_result, inc_warmup=T, pars = c("mu", "sigma", "lp__")) +
+  labs(title="Including warmup")
+```
+3-2: MCMCサンプルの抽出
+```{r}
+# MCMCサンプルの抽出(`permuted=FALSE`でMCMCサンプルの並び順保持)
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+dim(mcmc_sample_raw)  # MCMCサンプルの要素数（iter-warmup × chains x パラメータ数）
+dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
+```
+参考: bayesplotによる自己相関の評価
+```{r}
+# 自己相関の評価
+library(bayesplot)
+mcmc_acf_bar(mcmc_sample_raw, pars = c("mu", "sigma"))
+```
+3-3: bayesplotによる事後分布（信用区間）の可視化
+```{r}
+library(bayesplot)
+# ヒストグラム描画
+mcmc_hist(mcmc_sample_raw, pars = c("mu", "sigma"))
+# カーネル密度推定
+mcmc_dens(mcmc_sample_raw, pars = c("mu", "sigma"))
+# 事後分布の範囲
+mcmc_intervals(
+  mcmc_sample_raw, pars = c("mu", "sigma"),
+  prob = 0.8,  # 太い線の範囲（80%信用区間）
+  prob_outer = 0.95  # 細い線の範囲（95%信用区間）
+)
+```
+3-4-1: bayesplotによる事後予測分布のデータとの一致確認
+```{r}
+# 事後予測分布のMCMCサンプル取得(`permuted=TRUE`を指定)
+y_rep <- rstan::extract(mcmc_result, permuted = TRUE)$pred
+# 事後予測分布のヒストグラム描画
+ppc_hist(y = iris$Sepal.Width,
+         yrep = y_rep[1:5,])
+```
+3-4-2: 予測区間の推定
+```{r}
+# 予測区間を箱ひげ図で可視化
+mcmc_intervals(
+  mcmc_sample_raw,  # MCMCサンプル（`permuted=FALSE`のサンプル）
+  pars = c("pred[1]"), #正規表現で描画対象のパラメータを指定
+  prob = 0.80,  # 太い線の範囲(80%予測区間)
+  prob_outer = 0.99,  # 細い線の範囲(95%予測区間)
+)
+
+# 予測区間をヒストグラムで可視化
+mcmc_areas(
+  mcmc_sample_raw,  # MCMCサンプル（`permuted=FALSE`のサンプル）
+  pars = c("pred[1]"), #正規表現で描画対象のパラメータを指定
+  prob = 0.95,  # 太い線の範囲(95%予測区間)
+  prob_outer = 0.99,  # 細い線の範囲(99%予測区間)
+)
+```
+3-5: 異常検知
+```{r}
+# 異常検知の閾値（指定した予測区間の外側なら異常とみなす）
+P_THRESHOLD = 0.95
+lower = (1 - P_THRESHOLD)/2  # 下限
+upper = 1 - lower  # 上限
+# 事後予測分布のMCMCサンプルをベクトル化（chainsを合体）
+mcmc_pred_1 = as.vector(mcmc_sample_raw[,,"pred[1]"])
+# 予測区間の上下限を取得
+threshold = quantile(mcmc_pred_1, probs=c(lower, 0.5, upper))
+threshold
+# 予測区間の外側のデータ（異常値）を判定
+outlier = sepal_width < threshold[1] | sepal_width > threshold[3]
+# プロット用のDataFrame
+df_outlier = data.frame(x=sepal_width, y=1, outlier=outlier) # 異常判定
+df_pred_range = data.frame(x=c(threshold[1], threshold[3]), y=c(0,0)) # 予測区間
+# 事後予測分布と外れ値データをプロット
+#ggplot() +
+#  geom_density(data=data.frame(mcmc_pred_1), aes(x=mcmc_pred_1)) +
+#  geom_line(data=df_pred_range, aes(x=x, y=y), size=1) +
+#  geom_point(data=df_outlier, aes(x=x, y=y, color=outlier), size=3) + 
+#  labs(title="outlier data")
+mcmc_areas(
+  mcmc_sample_raw,  # MCMCサンプル（`permuted=FALSE`のサンプル）
+  pars = c("pred[1]"), #正規表現で描画対象のパラメータを指定
+  prob = 0.95,  # 太い線の範囲(95%予測区間)
+  prob_outer = 0.99,  # 細い線の範囲(99%予測区間)
+) + 
+  geom_point(data=df_outlier, aes(x=x, y=y, color=outlier), size=3) +
+  scale_colour_manual(values = c("blue", "red"))
+```
