@@ -16,7 +16,7 @@ ggplot(data=sales_climate, mapping=aes(x=temperature, y=sales)) +
   geom_point(aes(color=weather)) +
   labs(title="Relation between climate and sales")
 
-# 分散分析モデル作成
+# 正規線形モデル作成
 lm_brms <- brm(
   formula = sales ~ weather + temperature,
   family = gaussian(),
@@ -79,7 +79,7 @@ print(
   probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
 )
 ```
-Stanで実装した正規線形モデルの信用区間を表示
+Stanで実装した正規線形モデルの信用区間と予測区間を表示
 ```{r}
 # MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
 mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
@@ -101,7 +101,9 @@ p_pred <- ggplot() +
 # カテゴリ変数ごとにループ
 for(i_cat in 1:length(cat_unique)){
   cat_name = cat_unique[i_cat]  # カテゴリ名
-  X_pred <- 5:35  # 描画対象の説明変数範囲（本例では温度）
+  X_min <- min(sales_climate$temperature)
+  X_max <- max(sales_climate$temperature)
+  X_pred <- floor(X_min):ceiling(X_max)  # 描画対象の説明変数範囲（本例では温度）
   N_X <- length(X_pred)  # 説明変数範囲の要素数
   N_mcmc <- length(mcmc_sample$lp__)  # MCMCサンプルの個数
   

@@ -5,7 +5,7 @@ data {
   vector[N] temperature;//気温データ(説明変数)
   
   int N_pred;  //予測対象データの大きさ
-  vector[N_pred] temperature_pred;  //予測対象となる気温
+  vector[N_pred] temperature_pred;  //予測の横軸となる気温
 }
 
 // parametersブロック（パラメータの定義）
@@ -26,7 +26,7 @@ model {
 // generated quantitiesブロック（事後予測分布を記述）
 generated quantities {
   vector[N_pred] mu_pred; // 売上平均の事後分布
-  vector[N_pred] sales_pred; // 応答変数の事後分布（事後予測分布の対象）
+  vector[N_pred] sales_pred; // 応答変数の事後分布（事後予測分布）
   // 事後予測分布を得る
   for (i in 1:N_pred){
     mu_pred[i] = intercept + beta*temperature_pred[i];
