@@ -133,7 +133,7 @@ ggplot() +
               alpha=2/6) +
   geom_line(data=df_qua_sales, aes(x=temperature, y=`50%`), size=1) +
   geom_point(data=file_beer_sales_2, aes(x=temperature, y=sales), shape=1, size=3) +
-  labs(y='sales', 'Prediction interval')
+  labs(y='sales', title='Prediction interval')
 ```
 
 

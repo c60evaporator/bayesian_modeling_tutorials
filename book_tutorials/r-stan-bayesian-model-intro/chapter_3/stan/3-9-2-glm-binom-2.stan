@@ -32,7 +32,7 @@ generated quantities {
   vector[N_pred_nutr] p_pred_shade; // 曇り時のpの事後分布
   vector[N_pred_nutr] germ_pred_shade[N_pred_size]; // 曇り時の応答変数事後分布
   // 事後予測分布を得る
-  //(pの事後分布を信用区間用に求めたいので、対数を取らないことに注意)
+  //(pの事後分布を信用区間用に求めたいので、ロジット変換することに注意)
   for (i in 1:N_pred_nutr){
     // 確率期待値pの事後分布
     p_pred_sunshine[i] = inv_logit(Intercept + b_nutrition*nutr_pred[i] + b_solar); // 晴れ

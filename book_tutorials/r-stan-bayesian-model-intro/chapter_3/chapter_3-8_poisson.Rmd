@@ -240,10 +240,18 @@ Stanで実装したポアソン回帰モデルの信用区間と予測区間を�
 mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
 mcmc_b <- mcmc_sample$b  # 線形予測子係数のMCMCサンプル
 
+N_mcmc <- length(mcmc_sample$lp__)  # MCMCサンプルの個数
 cat_unique <- sort(unique(fish_num_climate$weather))  # カテゴリ変数のユニーク値
 mat_colnames <- colnames(design_mat)  # デザイン行列の列名
+X_min <- min(fish_num_climate$temperature)
+X_max <- max(fish_num_climate$temperature)
+
+# 事後予測分布算出用説明変数データ
+X_pred <- floor(X_min):ceiling(X_max)  # 描画対象の説明変数範囲（本例では温度）
+N_X <- length(X_pred)  # 説明変数範囲の要素数
 
 # 色リスト
+library(scales)
 COLOR_LIST = hue_pal()(length(cat_unique))
 # lambdaの信用区間描画用ggplotオブジェクト
 p_lambda <- ggplot() +
@@ -255,12 +263,6 @@ p_pred <- ggplot() +
 # カテゴリ変数ごとにループ
 for(i_cat in 1:length(cat_unique)){
   cat_name = cat_unique[i_cat]  # カテゴリ名
-  X_min <- min(fish_num_climate$temperature)
-  X_max <- max(fish_num_climate$temperature)
-  X_pred <- floor(X_min):ceiling(X_max)  # 描画対象の説明変数範囲（本例では温度）
-  N_X <- length(X_pred)  # 説明変数範囲の要素数
-  N_mcmc <- length(mcmc_sample$lp__)  # MCMCサンプルの個数
-  
   # 説明変数行列のdataframeを作成(デザイン行列に列を合わせる)
   for(i_matcol in 1:length(mat_colnames)){
     # 列を作成
@@ -352,7 +354,7 @@ p_pred <- p_pred +
   geom_point(data=fish_num_climate, aes(x=temperature, y=fish_num, color=weather),
               shape=1, size=2) +
   scale_color_manual(values=COLOR_LIST) + 
-  labs(y='sales', title ='Prediction interval')
+  labs(y='sales', title='Prediction interval')
   p_pred
 ```
 
