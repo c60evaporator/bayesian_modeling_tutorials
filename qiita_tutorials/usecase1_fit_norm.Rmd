@@ -56,7 +56,7 @@ lp__  48.24    0.02 1.00 45.64 48.53 49.21  1837    1 ←対数事後確率
 options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
 print(
   mcmc_result,                  # MCMCサンプルの結果
-  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+  probs = c(0.005, 0.025, 0.5, 0.975, 0.995)  # 中央値と95%, 99%信用区間を出力
 )
 ```
 手順3: モデルの評価
@@ -90,11 +90,11 @@ library(bayesplot)
 mcmc_hist(mcmc_sample_raw, pars = c("mu", "sigma"))
 # カーネル密度推定
 mcmc_dens(mcmc_sample_raw, pars = c("mu", "sigma"))
-# 事後分布の範囲
+# 信用区間
 mcmc_intervals(
   mcmc_sample_raw, pars = c("mu", "sigma"),
-  prob = 0.8,  # 太い線の範囲（80%信用区間）
-  prob_outer = 0.95  # 細い線の範囲（95%信用区間）
+  prob = 0.95,  # 太い線の範囲（95%信用区間）
+  prob_outer = 0.99  # 細い線の範囲（99%信用区間）
 )
 ```
 3-4-1: bayesplotによる事後予測分布のデータとの一致確認
@@ -107,12 +107,12 @@ ppc_hist(y = iris$Sepal.Width,
 ```
 3-4-2: 予測区間の推定
 ```{r}
-# 予測区間を箱ひげ図で可視化
+# 予測区間を可視化
 mcmc_intervals(
   mcmc_sample_raw,  # MCMCサンプル（`permuted=FALSE`のサンプル）
   pars = c("pred[1]"), #正規表現で描画対象のパラメータを指定
-  prob = 0.80,  # 太い線の範囲(80%予測区間)
-  prob_outer = 0.99,  # 細い線の範囲(95%予測区間)
+  prob = 0.95,  # 太い線の範囲(95%予測区間)
+  prob_outer = 0.99,  # 細い線の範囲(99%予測区間)
 )
 
 # 予測区間をヒストグラムで可視化
