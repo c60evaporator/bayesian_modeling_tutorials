@@ -1,0 +1,467 @@
+3-10実装例（交互作用モデル）
+
+1. 交互作用モデル(カテゴリ変数×カテゴリ変数)をbrmsで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(GGally)
+library(brms)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+interaction_1 <- read.csv("./sample_data/3-10-1-interaction-1.csv")
+summary(interaction_1)
+ggpairs(interaction_1)
+
+# モデル化
+interaction_brms_1 <- brm(
+  formula = sales ~ publicity * bargen,
+  family = gaussian(link="identity"),
+  data = interaction_1,
+  seed = 1,
+  prior = c(set_prior("", class="Intercept"),
+            set_prior("", class = "sigma"))
+)
+
+# 結果の表示
+interaction_brms_1
+```
+宣伝・安売りの有無に応じたmu(売上期待値)のベイズ信用区間表示
+```{r}
+# モデルの図示
+eff_1 <- conditional_effects(interaction_brms_1,
+                             effects = "publicity:bargen")
+plot(eff_1, points=TRUE)
+```
+宣伝・安売りの有無に応じた売上のベイズ予測区間表示
+```{r}
+# モデルの図示
+eff_1 <- conditional_effects(interaction_brms_1,
+                             effects = "publicity:bargen",
+                             method = "predict")
+plot(eff_1, points=TRUE)
+```
+
+2. 交互作用モデル(カテゴリ変数×数値変数)をbrmsで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(brms)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+interaction_2 <- read.csv("./sample_data/3-10-2-interaction-2.csv")
+ggplot(data=interaction_2, mapping=aes(x=temperature, y=sales)) +
+  geom_point(aes(color=publicity)) +
+  labs(title="Relation between temperature and sales")
+
+# モデル化
+interaction_brms_2 <- brm(
+  formula = sales ~ publicity * temperature,
+  family = gaussian(link="identity"),
+  data = interaction_2,
+  seed = 1,
+  prior = c(set_prior("", class="Intercept"),
+            set_prior("", class = "sigma"))
+)
+
+# 結果の表示
+interaction_brms_2
+```
+宣伝の有無・気温に応じたmu(売上期待値)のベイズ信用区間表示
+```{r}
+# モデルの図示
+eff_2 <- conditional_effects(interaction_brms_2,
+                             effects = "temperature:publicity")
+plot(eff_2, points=TRUE)
+```
+宣伝の有無・気温に応じた売上のベイズ予測区間表示
+```{r}
+# モデルの図示
+eff_2 <- conditional_effects(interaction_brms_2,
+                             effects = "temperature:publicity",
+                             method = "predict")
+plot(eff_2, points=TRUE)
+```
+
+3. 交互作用モデル(数値変数×数値変数)をbrmsで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(brms)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+interaction_3 <- read.csv("./sample_data/3-10-3-interaction-3.csv")
+ggplot(data=interaction_3, mapping=aes(x=product, y=sales)) +
+  geom_point(aes(color=clerk)) +
+  labs(title="Relation between product, clerk, and sales")
+
+# モデル化
+interaction_brms_3 <- brm(
+  formula = sales ~ product * clerk,
+  family = gaussian(link="identity"),
+  data = interaction_3,
+  seed = 1,
+  prior = c(set_prior("", class="Intercept"),
+            set_prior("", class = "sigma"))
+)
+
+# 結果の表示
+interaction_brms_3
+```
+店員数・商品数に応じたmu(売上期待値)のベイズ信用区間表示
+```{r}
+# 数値型変数clerkのカテゴリ化
+int_conditions <- list(
+  clerk = setNames(1:9, paste("clerk=", 1:9, sep=""))
+)
+int_conditions
+# 信用区間の図示
+eff_3 <- conditional_effects(interaction_brms_3,
+                             effects = "product:clerk",
+                             int_conditions = int_conditions)
+plot(eff_3, points=TRUE)
+```
+店員数・商品数に応じた売上のベイズ予測区間表示
+```{r}
+# 数値型変数clerkのカテゴリ化
+int_conditions <- list(
+  clerk = setNames(1:9, paste("clerk=", 1:9, sep=""))
+)
+int_conditions
+# 予測区間の図示
+eff_3 <- conditional_effects(interaction_brms_3,
+                             effects = "product:clerk",
+                             int_conditions = int_conditions,
+                             method = "predict")
+plot(eff_3, points=TRUE)
+```
+
+1. 交互作用モデル(カテゴリ変数×カテゴリ変数)をStanで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(GGally)
+library(brms)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+interaction_1 <- read.csv("./sample_data/3-10-1-interaction-1.csv")
+sample_size <- nrow(interaction_1) # データ数
+summary(interaction_1)
+ggpairs(interaction_1)
+
+# カテゴリ変数のダミー変数化
+publicity_dummy <- as.numeric(interaction_1$publicity == "to_implement")
+bargen_dummy <- as.numeric(interaction_1$bargen == "to_implement")
+
+# 事後予測分布算出用説明変数データ
+PUBLICITY_PRED <- c(1, 0)  # 宣伝ダミー変数
+BARGEN_PRED <- c(1, 0)  # 安売りダミー変数
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = sample_size,
+  sales = interaction_1$sales,
+  publicity  = publicity_dummy,
+  bargen = bargen_dummy,
+  N_bool_1 = length(PUBLICITY_PRED),
+  N_bool_2 = length(BARGEN_PRED),
+  publicity_pred = PUBLICITY_PRED,
+  bargen_pred = BARGEN_PRED
+  )
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-10-1-glm-interaction-1.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+
+2. 交互作用モデル(カテゴリ変数×数値変数)をStanで実装
+```{r}
+# パッケージ読込
+library(rstan)
+library(caret)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+interaction_2 <- read.csv("./sample_data/3-10-2-interaction-2.csv")
+sample_size <- nrow(interaction_2) # データ数
+ggplot(data=interaction_2, mapping=aes(x=temperature, y=sales)) +
+  geom_point(aes(color=publicity)) +
+  labs(title="Relation between temperature and sales")
+
+# カテゴリ変数のダミー変数化(caret使用)
+publicity_unique <- sort(unique(interaction_2$publicity))  # カテゴリ変数のユニーク値(名前順ソート)
+n_publicity <- length(publicity_unique)  # カテゴリ変数のユニーク要素数
+dummy_train <- dummyVars(~., data=data.frame(publicity=interaction_2$publicity))
+publicity_dummy <- as.data.frame(
+  predict(dummy_train, data.frame(publicity=interaction_2$publicity))
+  )
+publicity_dummy <- as.matrix(publicity_dummy[,-n_publicity]) # 最後の列を削除
+
+# 事後予測分布算出用説明変数データ
+publicity_pred <- matrix(0, nrow=n_publicity, ncol=n_publicity-1)# 宣伝ダミー変数
+for(i in 1:(n_publicity-1)){
+  publicity_pred[i, i] <- 1
+}
+TEMPERATURE_PRED <- 0:30  # 気温
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = sample_size,
+  sales = interaction_2$sales,
+  publicity  = publicity_dummy,
+  temperature = interaction_2$temperature,
+  N_cat_1 = n_publicity,
+  N_numeric_1 = length(TEMPERATURE_PRED),
+  publicity_pred = publicity_pred,
+  temp_pred = TEMPERATURE_PRED
+  )
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-10-2-glm-interaction-2.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+muの信用区間を散布図上に表示
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(n_publicity)
+# muの信用区間描画用ggplotオブジェクト
+p_mu <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_cat in 1:n_publicity){
+  cat_name = publicity_unique[i_cat]  # カテゴリ名
+  # muの50%信用区間と95%信用区間を取得
+  qua_mu <- apply(mcmc_sample$mu_pred[,i_cat,],
+                  2,
+                  quantile,
+                  probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+  df_qua_mu <- data.frame(
+    temperature=TEMPERATURE_PRED,
+    t(qua_mu),
+    check.names = FALSE
+  )
+  # lambdaの50%信用区間と95%信用区間をプロット
+  p_mu <- p_mu +
+    geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/4) +
+    geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`25%`, ymax=`75%`),
+                fill=COLOR_LIST[i_cat], alpha=1/2) +
+    geom_line(data=df_qua_mu, aes(x=temperature, y=`50%`),
+              colour=COLOR_LIST[i_cat], size=1)
+}
+p_mu <- p_mu +
+  geom_point(data=interaction_2, aes(x=temperature, y=sales, color=publicity)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='sales', title ='Credible interval')
+p_mu
+```
+予測区間を散布図上に表示
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(n_publicity)
+# 予測区間描画用ggplotオブジェクト
+p_pred <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_cat in 1:n_publicity){
+  cat_name = publicity_unique[i_cat]  # カテゴリ名
+  # 50%予測区間と95%予測区間を取得
+  qua_pred <- apply(mcmc_sample$sales_pred[,i_cat,],
+                  2,
+                  quantile,
+                  probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+  df_qua_pred <- data.frame(
+    temperature=TEMPERATURE_PRED,
+    t(qua_pred),
+    check.names = FALSE
+  )
+  # 50%予測区間と95%予測区間をプロット
+  p_pred <- p_pred +
+    geom_ribbon(data=df_qua_pred, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/4) +
+    geom_ribbon(data=df_qua_pred, aes(x=temperature, ymin=`25%`, ymax=`75%`),
+                fill=COLOR_LIST[i_cat], alpha=1/2) +
+    geom_line(data=df_qua_pred, aes(x=temperature, y=`50%`),
+              colour=COLOR_LIST[i_cat], size=1)
+}
+p_pred <- p_pred +
+  geom_point(data=interaction_2, aes(x=temperature, y=sales, color=publicity)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='sales', title ='Prediction interval')
+p_pred
+```
+
+3. 交互作用モデル(数値変数×数値変数)をStanで実装
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+interaction_3 <- read.csv("./sample_data/3-10-3-interaction-3.csv")
+sample_size <- nrow(interaction_3) # データ数
+ggplot(data=interaction_3, mapping=aes(x=product, y=sales)) +
+  geom_point(aes(color=clerk)) +
+  labs(title="Relation between product, clerk, and sales")
+
+# 事後予測分布算出用説明変数データ
+CLERK_PRED <- 1:10  # 店員数
+PRODUCT_PRED <- 10:50  # 商品数
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = sample_size,
+  sales = interaction_3$sales,
+  clerk = interaction_3$clerk,
+  product = interaction_3$product,
+  N_numeric_1 = length(CLERK_PRED),
+  N_numeric_2 = length(PRODUCT_PRED),
+  clerk_pred = CLERK_PRED,
+  product_pred = PRODUCT_PRED
+  )
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-10-3-glm-interaction-3.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+muの信用区間を散布図上に表示
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+# 色分け用変数を文字列化
+interaction_3_color <- data.frame(
+  interaction_3,
+  clerk_str = as.character(interaction_3$clerk)
+)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(length(CLERK_PRED))
+# muの信用区間描画用ggplotオブジェクト
+p_mu <- ggplot() +
+  theme_bw(base_size=18)
+
+# 色分け用変数ごとにループ
+for(i_color in 1:length(CLERK_PRED)){
+  # muの50%信用区間と95%信用区間を取得
+  qua_mu <- apply(mcmc_sample$mu_pred[,i_color,],
+                  2,
+                  quantile,
+                  probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+  df_qua_mu <- data.frame(
+    product=PRODUCT_PRED,
+    t(qua_mu),
+    check.names = FALSE
+  )
+  # lambdaの50%信用区間と95%信用区間をプロット
+  p_mu <- p_mu +
+    geom_ribbon(data=df_qua_mu, aes(x=product, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_color], alpha=1/4) +
+    geom_ribbon(data=df_qua_mu, aes(x=product, ymin=`25%`, ymax=`75%`),
+                fill=COLOR_LIST[i_color], alpha=1/2) +
+    geom_line(data=df_qua_mu, aes(x=product, y=`50%`),
+              colour=COLOR_LIST[i_color], size=1)
+}
+p_mu <- p_mu +
+  geom_point(data=interaction_3_color, aes(x=product, y=sales, color=clerk_str)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='sales', title ='Credible interval')
+p_mu
+```
+予測区間を散布図上に表示
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(length(CLERK_PRED))
+# 予測区間描画用ggplotオブジェクト
+p_pred <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_color in 1:length(CLERK_PRED)){
+  # 50%予測区間と95%予測区間を取得
+  qua_pred <- apply(mcmc_sample$sales_pred[,i_color,],
+                  2,
+                  quantile,
+                  probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+  df_qua_pred <- data.frame(
+    product=PRODUCT_PRED,
+    t(qua_pred),
+    check.names = FALSE
+  )
+  # 50%予測区間と95%予測区間をプロット
+  p_pred <- p_pred +
+    geom_ribbon(data=df_qua_pred, aes(x=product, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_color], alpha=1/4) +
+    geom_ribbon(data=df_qua_pred, aes(x=product, ymin=`25%`, ymax=`75%`),
+                fill=COLOR_LIST[i_color], alpha=1/2) +
+    geom_line(data=df_qua_pred, aes(x=product, y=`50%`),
+              colour=COLOR_LIST[i_color], size=1)
+}
+p_pred <- p_pred +
+  geom_point(data=interaction_3_color, aes(x=product, y=sales, color=clerk_str)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='sales', title ='Prediction interval')
+p_pred
+```

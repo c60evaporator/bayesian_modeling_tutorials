@@ -28,7 +28,7 @@ glm_binom_brms <- brm(
 # 結果の表示
 glm_binom_brms
 ```
-各天気・栄養量での期待値のベイズ信用区間表示
+各天気・栄養量でのpのベイズ信用区間表示
 ```{r}
 eff <- conditional_effects(glm_binom_brms, 
                            effects = "nutrition:solar",
@@ -56,7 +56,7 @@ options(mc.cores = parallel::detectCores())  # 計算並列化
 
 # データの読込と可視化
 germination_dat <- read.csv("./sample_data/3-9-1-germination.csv")
-sample_size <- nrow(germination_dat) # サンプルサイズ
+sample_size <- nrow(germination_dat) # データ数
 ggplot(data=germination_dat, mapping=aes(x=nutrition, y=germination)) +
   geom_point(aes(color=solar)) +
   labs(title="Relation between nutrition and germination")

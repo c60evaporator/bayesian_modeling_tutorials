@@ -31,15 +31,18 @@ lm_brms
 ```
 各天気・気温での平均値のベイズ信用区間表示
 ```{r}
-eff <- marginal_effects(lm_brms, effects = "temperature:weather")
+eff <- conditional_effects(lm_brms,
+                           effects = "temperature:weather")
 plot(eff, points=TRUE)
 ```
 各天気・気温でのベイズ予測区間表示
 ```{r}
-eff <- marginal_effects(lm_brms, effects = "temperature:weather", method = "predict")
+eff <- conditional_effects(lm_brms,
+                           effects = "temperature:weather",
+                           method = "predict")
 plot(eff, points=TRUE)
 ```
-正規線形モデルをStanで実装
+正規線形モデルをStanで実装（デザイン行列使用）
 ```{r}
 # パッケージ読込
 library(rstan)
@@ -203,3 +206,141 @@ p_pred <- p_pred +
   p_pred
 ```
 
+正規線形モデルをStanで実装（デザイン行列不使用）
+```{r}
+# パッケージ読込
+library(rstan)
+library(caret)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# データの読込と可視化
+sales_climate <- read.csv("./sample_data/3-7-1-beer-sales-4.csv")
+sample_size <- nrow(sales_climate) # データ数
+ggplot(data=sales_climate, mapping=aes(x=temperature, y=sales)) +
+  geom_point(aes(color=weather)) +
+  labs(title="Relation between climate and sales")
+
+# カテゴリ変数のダミー変数化(caret使用)
+weather_unique <- sort(unique(sales_climate$weather))  #  カテゴリ変数のユニーク値(名前順ソート)
+n_weather <- length(weather_unique)  # カテゴリ変数のユニーク要素数
+dummy_train <- dummyVars(~., data=data.frame(weather=sales_climate$weather))
+weather_dummy <- as.data.frame(
+  predict(dummy_train, data.frame(weather=sales_climate$weather))
+  )
+weather_dummy <- as.matrix(weather_dummy[,-n_weather]) # 最後の列を削除
+
+# 事後予測分布算出用説明変数データ
+weather_pred <- matrix(0, nrow=n_weather, ncol=n_weather-1)# 天気ダミー変数
+for(i in 1:(n_weather-1)){
+  weather_pred[i, i] <- 1
+}
+TEMPERATURE_PRED <- 10:30  # 気温
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = sample_size,
+  sales = sales_climate$sales,
+  weather  = weather_dummy,
+  temperature = sales_climate$temperature,
+  N_cat_1 = n_weather,
+  N_numeric_1 = length(TEMPERATURE_PRED),
+  weather_pred = weather_pred,
+  temp_pred = TEMPERATURE_PRED
+  )
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/3-7-1-lm-norm.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1         # 乱数シード
+)
+
+# 結果の表示
+print(
+  mcmc_result,           # MCMCサンプルの結果
+  probs = c(0.025, 0.5, 0.975)  # 中央値と95%信用区間を出力
+)
+```
+muの信用区間を散布図上に表示
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(n_weather)
+# muの信用区間描画用ggplotオブジェクト
+p_mu <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_cat in 1:n_weather){
+  cat_name = weather_unique[i_cat]  # カテゴリ名
+  # muの50%信用区間と95%信用区間を取得
+  qua_mu <- apply(mcmc_sample$mu_pred[,i_cat,],
+                  2,
+                  quantile,
+                  probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+  df_qua_mu <- data.frame(
+    temperature=TEMPERATURE_PRED,
+    t(qua_mu),
+    check.names = FALSE
+  )
+  # lambdaの50%信用区間と95%信用区間をプロット
+  p_mu <- p_mu +
+    geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/4) +
+    geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`25%`, ymax=`75%`),
+                fill=COLOR_LIST[i_cat], alpha=1/2) +
+    geom_line(data=df_qua_mu, aes(x=temperature, y=`50%`),
+              colour=COLOR_LIST[i_cat], size=1)
+}
+p_mu <- p_mu +
+  geom_point(data=sales_climate, aes(x=temperature, y=sales, color=weather)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='sales', title ='Credible interval')
+p_mu
+```
+予測区間を散布図上に表示
+```{r}
+# MCMCサンプルを取り出す（事後予測分布のMCMCサンプルは含まない）
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(n_weather)
+# 予測区間描画用ggplotオブジェクト
+p_pred <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_cat in 1:n_weather){
+  cat_name = weather_unique[i_cat]  # カテゴリ名
+  # 50%予測区間と95%予測区間を取得
+  qua_pred <- apply(mcmc_sample$sales_pred[,i_cat,],
+                  2,
+                  quantile,
+                  probs=c(0.025, 0.25, 0.50, 0.75, 0.975))
+  df_qua_pred <- data.frame(
+    temperature=TEMPERATURE_PRED,
+    t(qua_pred),
+    check.names = FALSE
+  )
+  # 50%予測区間と95%予測区間をプロット
+  p_pred <- p_pred +
+    geom_ribbon(data=df_qua_pred, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/4) +
+    geom_ribbon(data=df_qua_pred, aes(x=temperature, ymin=`25%`, ymax=`75%`),
+                fill=COLOR_LIST[i_cat], alpha=1/2) +
+    geom_line(data=df_qua_pred, aes(x=temperature, y=`50%`),
+              colour=COLOR_LIST[i_cat], size=1)
+}
+p_pred <- p_pred +
+  geom_point(data=sales_climate, aes(x=temperature, y=sales, color=weather)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='sales', title ='Prediction interval')
+p_pred
+```

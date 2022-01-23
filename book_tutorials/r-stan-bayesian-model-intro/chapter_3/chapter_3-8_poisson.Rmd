@@ -30,14 +30,16 @@ poisson_brms
 ```
 各天気・気温での平均値のベイズ信用区間表示
 ```{r}
-eff <- marginal_effects(poisson_brms, effects = "temperature:weather")
+eff <- conditional_effects(poisson_brms, 
+                           effects = "temperature:weather")
 plot(eff, points=TRUE)
 ```
 各天気・気温でのベイズ予測区間表示
 ```{r}
-eff <- marginal_effects(poisson_brms, effects = "temperature:weather",
-                        method = "predict",
-                        probs = c(0.005, 0.995)  # 過分散判定のため予測区間を99%と広くとる
+eff <- conditional_effects(poisson_brms, 
+                           effects = "temperature:weather",
+                           method = "predict",
+                           probs = c(0.005, 0.995)  # 過分散判定のため予測区間を99%と広くとる
                         )
 plot(eff, points=TRUE)
 ```
