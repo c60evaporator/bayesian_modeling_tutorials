@@ -170,7 +170,7 @@ plots
 ```
 予測区間を散布図上に表示
 ```{r}
-# MCMCサンプルを取得
+# MCMCサンプルを取得（事後予測分布のMCMCサンプルを含む）
 mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
 # 色リスト
 library(scales)
