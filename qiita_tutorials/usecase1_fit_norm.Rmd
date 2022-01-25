@@ -127,8 +127,8 @@ mcmc_areas(
 ```{r}
 # 異常検知の閾値（指定した予測区間の外側なら異常とみなす）
 P_THRESHOLD = 0.95
-lower = (1 - P_THRESHOLD)/2  # 下限
-upper = 1 - lower  # 上限
+lower = (1 - P_THRESHOLD)/2  # 下限%
+upper = 1 - lower  # 上限%
 # 事後予測分布のMCMCサンプルをベクトル化（chainsを合体）
 mcmc_pred_1 = as.vector(mcmc_sample_raw[,,"pred[1]"])
 # 予測区間の上下限を取得
