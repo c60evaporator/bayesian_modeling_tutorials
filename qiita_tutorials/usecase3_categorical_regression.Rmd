@@ -1,0 +1,205 @@
+ユースケース3: 分散分析
+
+手順1. 確率モデルの構築
+散布図描画
+```{r}
+# データ読込（irisデータセットのsepal_widthとspecies）
+df_iris <- data.frame(
+  sepal_width = iris$Sepal.Width,
+  species = iris$Species
+)
+# ヒストグラム描画
+library(ggplot2)
+iris
+ggplot(df_iris, mapping=aes(x=sepal_width, fill=species)) +
+  geom_histogram(position="identity", alpha=0.6, bins=20) +
+  labs(title="Histogram of sepal_width")
+```
+手順2. MCMCでパラメータの事後確率分布算出
+
+2-1: MCMC実行
+```{r}
+# パッケージ読込
+library(rstan)
+library(caret)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# カテゴリ変数のダミー変数化(caret使用)
+species_unique <- sort(unique(df_iris$species))  #  カテゴリ変数のユニーク値(名前順ソート)
+n_species <- length(species_unique)  # カテゴリ変数のユニーク要素数
+dummy_train <- dummyVars(~., data=data.frame(species=df_iris$species))
+species_dummy <- as.data.frame(
+  predict(dummy_train, data.frame(species=df_iris$species))
+  )
+species_dummy <- as.matrix(species_dummy[,-n_species]) # 最後の列を削除
+
+# 事後予測分布算出用説明変数データ
+species_pred <- matrix(0, nrow=n_species, ncol=n_species-1)# 品種ダミー変数
+for(i in 1:(n_species-1)){
+  species_pred[i, i] <- 1
+}
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+N <- nrow(iris)  # データ数
+data_list <- list(
+  N = N,
+  sepal_width = df_iris$sepal_width,
+  species  = species_dummy,
+  N_cat = n_species,
+  species_pred = species_pred
+  )
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/usecase3_categorical_regression.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+```
+2-2: モデルの概要確認
+```{r}
+options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
+print(
+  mcmc_result,                  # MCMCサンプルの結果
+  probs = c(0.005, 0.025, 0.5, 0.975, 0.995)  # 中央値と95%, 99%信用区間を出力
+)
+```
+手順3: モデルの評価
+
+3-1: トレースプロットによる収束確認
+```{r}
+# トレースプロット（バーンイン期間なし）
+traceplot(mcmc_result, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
+  labs(title="Without warmup")
+# トレースプロット（バーンイン期間あり）
+traceplot(mcmc_result, inc_warmup=T, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
+  labs(title="Including warmup")
+```
+3-2: MCMCサンプルの抽出
+```{r}
+# MCMCサンプルの抽出(`permuted=FALSE`でMCMCサンプルの並び順保持)
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+dim(mcmc_sample_raw)  # MCMCサンプルの要素数（iter-warmup × chains x パラメータ数）
+dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
+```
+3-3-1: bayesplotによる事後分布（信用区間）の可視化
+```{r}
+library(bayesplot)
+# ヒストグラム描画
+mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "sigma"))
+# カーネル密度推定
+mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "sigma"))
+# 信用区間
+mcmc_intervals(
+  mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma"),
+  prob = 0.95,  # 太い線の範囲（95%信用区間）
+  prob_outer = 0.99  # 細い線の範囲（99%信用区間）
+)
+```
+3-3-2: muの事後分布と信用区間を表示
+```{r}
+# MCMCサンプル取得(`permuted=TRUE`を指定)
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(n_species)
+# muの事後分布描画用ggplotオブジェクト
+p_mu <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにmuの事後分布を描画
+for(i_cat in 1:n_species){
+  # muの95%信用区間と99%信用区間を取得
+  df_mcmc_mu <- data.frame(mu_pred=mcmc_sample$mu_pred[,i_cat],
+                           species=species_unique[i_cat])
+  p_mu <- p_mu +
+    geom_density(data=df_mcmc_mu, 
+                 aes(x=mu_pred, color=species, fill=species),
+                 alpha=1/4, size=1.5)
+}
+p_mu + labs(title="Credible interval of `mu`")
+
+# カテゴリ変数ごとにmuの信用区間を描画
+mcmc_intervals(
+  mcmc_sample_raw, regex_pars = "mu_pred",
+  prob = 0.95,  # 太い線の範囲
+  prob_outer = 0.99  # 細い線の範囲
+)
+```
+3-4: 予測区間を散布図上に表示
+```{r}
+# 事後予測分布描画用ggplotオブジェクト
+p_pred <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにmuの事後分布を描画
+for(i_cat in 1:n_species){
+  # muの95%信用区間と99%信用区間を取得
+  df_mcmc_sepal_width <- data.frame(
+    sepal_width_pred=mcmc_sample$sepal_width_pred[,i_cat],
+    species=species_unique[i_cat]
+    )
+  p_pred <- p_pred +
+    geom_density(data=df_mcmc_sepal_width, 
+                 aes(x=sepal_width_pred, color=species, fill=species),
+                 alpha=1/4, size=1.5)
+}
+p_pred + labs(title="Prediction interval")
+```
+参考: 平均の差の検定
+```{r}
+# 品種ごとにデータを分ける
+df_setosa <- df_iris[df_iris$species == "setosa",]
+df_versicolor <- df_iris[df_iris$species == "versicolor",]
+df_virginica <- df_iris[df_iris$species == "virginica",]
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+N_setosa <- nrow(df_setosa)  # setosaのデータ数
+N_versicolor <- nrow(df_versicolor)  # versicolorのデータ数
+N_virginica <- nrow(df_virginica)  # virginicaのデータ数
+data_list <- list(
+  N_setosa = N_setosa,
+  N_versicolor = N_versicolor,
+  N_virginica = N_virginica,
+  sepal_width_setosa = df_setosa$sepal_width,
+  sepal_width_versicolor = df_versicolor$sepal_width,
+  sepal_width_virginica = df_virginica$sepal_width
+  )
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/usecase3_categorical_mean_test.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+
+# モデルの概要確認
+print(
+  mcmc_result,                  # MCMCサンプルの結果
+  probs = c(0.005, 0.025, 0.5, 0.975, 0.995)  # 中央値と95%, 99%信用区間を出力
+)
+
+# MCMCサンプルの抽出(`permuted=FALSE`でMCMCサンプルの並び順保持)
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+# 平均の差の事後分布ヒストグラム描画
+mcmc_dens(mcmc_sample_raw, regex_pars = "diff_")
+# 平均の差の信用区間を描画
+mcmc_intervals(
+  mcmc_sample_raw, regex_pars = "diff_",
+  prob = 0.95,  # 太い線の範囲
+  prob_outer = 0.99  # 細い線の範囲
+)
+```
+
