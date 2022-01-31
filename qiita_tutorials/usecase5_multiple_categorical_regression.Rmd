@@ -1,0 +1,265 @@
+ユースケース5: カテゴリ変数を含む重回帰
+
+手順1. 確率モデルの構築
+散布図描画
+```{r}
+# データ読込（irisデータセットのsepal_widthとspecies）
+df_iris <- data.frame(
+  sepal_width = iris$Sepal.Width,
+  sepal_length = iris$Sepal.Length,
+  species = iris$Species
+)
+# 散布図描画
+library(ggplot2)
+ggplot(df_iris, aes(x = sepal_length, y = sepal_width)) +
+  geom_point(aes(color=species)) +
+  labs(title ="sepal_length, sepal_width, and species")
+```
+手順2. MCMCでパラメータの事後確率分布算出
+
+2-1: MCMC実行
+```{r}
+# パッケージ読込
+library(rstan)
+library(caret)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+# カテゴリ変数のダミー変数化(caret使用)
+species_unique <- sort(unique(df_iris$species))  #  カテゴリ変数のユニーク値(名前順ソート)
+n_species <- length(species_unique)  # カテゴリ変数のユニーク要素数
+dummy_train <- dummyVars(~., data=data.frame(species=df_iris$species))
+species_dummy <- as.data.frame(
+  predict(dummy_train, data.frame(species=df_iris$species))
+  )
+species_dummy <- as.matrix(species_dummy[,-n_species]) # 最後の列を削除
+
+# 事後予測分布の横軸＆色分けに使用する説明変数のベクトル
+species_pred <- matrix(0, nrow=n_species, ncol=n_species-1)# 品種ダミー変数
+for(i in 1:(n_species-1)){
+  species_pred[i, i] <- 1
+}
+SEPAL_LENGTH_BY = 1.0
+SEPAL_LENGTH_PRED <- seq(4, 8, by=SEPAL_LENGTH_BY)
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+N <- nrow(iris)  # データ数
+data_list <- list(
+  N = N,
+  N_cat_1 = n_species,
+  sepal_width = df_iris$sepal_width,
+  sepal_length = df_iris$sepal_length,
+  species = species_dummy,
+  N_num_1 = length(SEPAL_LENGTH_PRED),
+  sepal_length_pred = SEPAL_LENGTH_PRED,
+  species_pred = species_pred
+  )
+data_list
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./stan/usecase5_multiple_categorical_regression.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+```
+2-2: MCMC結果の概要確認
+```{r}
+options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
+print(
+  mcmc_result,                  # MCMCサンプルの結果
+  probs = c(0.005, 0.025, 0.5, 0.975, 0.995)  # 中央値と95%, 99%信用区間を出力
+)
+```
+手順3: モデルの評価
+
+3-1: トレースプロットによる収束確認
+```{r}
+# トレースプロット（バーンイン期間を含まない）
+traceplot(mcmc_result, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
+  labs(title="Without warmup")
+# トレースプロット（バーンイン期間を含む）
+traceplot(mcmc_result, inc_warmup=T, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
+  labs(title="Including warmup")
+```
+3-2: MCMCサンプルの抽出
+```{r}
+# MCMCサンプルの抽出(`permuted=FALSE`でMCMCサンプルの並び順保持)
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+dim(mcmc_sample_raw)  # MCMCサンプルの要素数（iter-warmup × chains x パラメータ数）
+dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
+```
+3-3-1: bayesplotによる事後分布（信用区間）の可視化
+```{r}
+library(bayesplot)
+# ヒストグラム描画
+mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma"))
+# カーネル密度推定
+mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma"))
+# 信用区間
+mcmc_intervals(
+  mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma"),
+  prob = 0.95,  # 太い線の範囲（95%信用区間）
+  prob_outer = 0.99  # 細い線の範囲（99%信用区間）
+)
+```
+3-3-2: muの信用区間を散布図上に表示
+```{r}
+# MCMCサンプル取得(`permuted=TRUE`を指定)
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(n_species)
+# muの信用区間描画用ggplotオブジェクト
+p_mu <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_cat in 1:n_species){
+  cat_name = species_unique[i_cat]  # カテゴリ名
+  # muの95%信用区間と99%信用区間を取得
+  qua_mu <- apply(mcmc_sample$mu_pred[,,i_cat],
+                  2,
+                  quantile,
+                  probs=c(0.005, 0.025, 0.50, 0.975, 0.995))
+  df_qua_mu <- data.frame(
+    sepal_length=SEPAL_LENGTH_PRED,
+    t(qua_mu),
+    check.names = FALSE
+  )
+  # muの95%信用区間と99%信用区間をプロット
+  p_mu <- p_mu +
+    geom_ribbon(data=df_qua_mu, aes(x=sepal_length, ymin=`0.5%`, ymax=`99.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/6) +
+    geom_ribbon(data=df_qua_mu, aes(x=sepal_length, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/3) +
+    geom_line(data=df_qua_mu, aes(x=sepal_length, y=`50%`),
+              colour=COLOR_LIST[i_cat], size=1)
+}
+p_mu <- p_mu +
+  geom_point(data=df_iris, aes(x=sepal_length, y=sepal_width, color=species)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='species', title ='Credible interval of `mu`')
+p_mu
+```
+3-4: 予測区間を散布図上に表示
+```{r}
+# 色リスト
+library(scales)
+COLOR_LIST = hue_pal()(n_species)
+# 予測区間描画用ggplotオブジェクト
+p_pred <- ggplot() +
+  theme_bw(base_size=18)
+
+# カテゴリ変数ごとにループ
+for(i_cat in 1:n_species){
+  cat_name = species_unique[i_cat]  # カテゴリ名
+  # 95%予測区間と99%予測区間を取得
+  qua_pred <- apply(mcmc_sample$sepal_width_pred[,,i_cat],
+                    2,
+                    quantile,
+                    probs=c(0.005, 0.025, 0.50, 0.975, 0.995))
+  df_qua_pred <- data.frame(
+    sepal_length=SEPAL_LENGTH_PRED,
+    t(qua_pred),
+    check.names = FALSE
+  )
+  # 95%予測区間と99%予測区間をプロット
+  p_pred <- p_pred +
+    geom_ribbon(data=df_qua_pred, aes(x=sepal_length, ymin=`0.5%`, ymax=`99.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/6) +
+    geom_ribbon(data=df_qua_pred, aes(x=sepal_length, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/3) +
+    geom_line(data=df_qua_pred, aes(x=sepal_length, y=`50%`),
+              colour=COLOR_LIST[i_cat], size=1)
+}
+p_pred <- p_pred +
+  geom_point(data=df_iris, aes(x=sepal_length, y=sepal_width, color=species)) +
+  scale_color_manual(values=COLOR_LIST) +
+  labs(y='sepal_width', title ='Predict interval')
+p_pred
+```
+3-5: 異常検知
+```{r}
+# 異常検知の閾値（指定した予測区間の外側なら異常とみなす）
+P_THRESHOLD = 0.95
+lower = (1 - P_THRESHOLD)/2  # 下限%
+upper = 1 - lower  # 上限%
+
+# パラメータごとのMCMCサンプルを保持
+mcmc_Intercept <- mcmc_sample$Intercept
+mcmc_b_sepal_length <- mcmc_sample$b_sepal_length
+mcmc_b_species <- mcmc_sample$b_species
+mcmc_sigma <- mcmc_sample$sigma
+
+# 平均muと事後予測分布のMCMCサンプルを、データの説明変数ごとに作成
+N_mcmc <- length(mcmc_sample$lp__)  # MCMCサンプルの個数
+mcmc_mu <- as.data.frame(matrix(nrow=N_mcmc, ncol=N))  # muのMCMCサンプル格納用
+mcmc_sepal_width <- as.data.frame(matrix(nrow=N_mcmc, ncol=N))  # 予測分布MCMCサンプル格納用
+# データごとにループ
+for (i in 1:N){
+  # 平均muのMCMCサンプル = 切片のMCMCサンプル + sepal_length係数のMCMCサンプル*sepal_length
+  # + speciesのMCMCサンプル行列 %*% speciesのダミー変数ベクトル
+  mcmc_mu[,i] <- mcmc_Intercept + mcmc_b_sepal_length*df_iris$sepal_length[i] + (mcmc_b_species %*% species_dummy[i,])[,1]
+  # 事後予測分布のMCMCサンプルを正規分布乱数から生成
+  mcmc_sepal_width[,i] <- rnorm(n=N_mcmc, mean=mcmc_mu[,i], sd=mcmc_sigma)
+}
+
+# 予測区間の上下限を取得
+threshold <- apply(mcmc_sepal_width,
+                   2,
+                   quantile,
+                   probs=c(lower, upper))
+rownames(threshold) <- c("lower", "upper")
+# プロット用のDataFrame
+df_outlier <- data.frame(
+  df_iris,
+  t(threshold)
+)
+# 予測区間の外側のデータ（異常値）を判定
+df_outlier <- data.frame(
+  df_outlier,
+  outlier = df_outlier$sepal_width < df_outlier$lower | df_outlier$sepal_width > df_outlier$upper
+)
+
+# 予測区間と外れ値データをプロット
+# 描画用ggplotオブジェクト
+p_pred <- ggplot() +
+  theme_bw(base_size=18)
+# カテゴリ変数ごとにループ
+for(i_cat in 1:n_species){
+  cat_name = species_unique[i_cat]  # カテゴリ名
+  # 50%予測区間と95%予測区間を取得
+  qua_pred <- apply(mcmc_sample$sepal_width_pred[,,i_cat],
+                    2,
+                    quantile,
+                    probs=c(0.005, 0.025, 0.50, 0.975, 0.995))
+  df_qua_pred <- data.frame(
+    sepal_length=SEPAL_LENGTH_PRED,
+    t(qua_pred),
+    check.names = FALSE
+  )
+  # 50%予測区間と95%予測区間をプロット
+  p_pred <- p_pred +
+    geom_ribbon(data=df_qua_pred, aes(x=sepal_length, ymin=`0.5%`, ymax=`99.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/6) +
+    geom_ribbon(data=df_qua_pred, aes(x=sepal_length, ymin=`2.5%`, ymax=`97.5%`),
+                fill=COLOR_LIST[i_cat], alpha=1/3) +
+    geom_line(data=df_qua_pred, aes(x=sepal_length, y=`50%`),
+              colour=COLOR_LIST[i_cat], size=1)
+}
+p_pred <- p_pred +
+  geom_point(data=df_outlier, 
+             aes(x=sepal_length, y=sepal_width, color=species, shape=outlier)) +
+  scale_color_manual(values=COLOR_LIST) +
+  scale_shape_manual(values = c(20,4)) + #https://ggplot2.tidyverse.org/reference/scale_shape.html
+  labs(y='sepal_width', title ='Anomaly detection')
+p_pred
+```

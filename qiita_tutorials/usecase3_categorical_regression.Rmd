@@ -63,7 +63,7 @@ mcmc_result <- stan(
   thin = 1          # 間引き数（1なら間引きなし）
 )
 ```
-2-2: モデルの概要確認
+2-2: MCMC結果の概要確認
 ```{r}
 options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
 print(
@@ -75,10 +75,10 @@ print(
 
 3-1: トレースプロットによる収束確認
 ```{r}
-# トレースプロット（バーンイン期間なし）
+# トレースプロット（バーンイン期間を含まない）
 traceplot(mcmc_result, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
   labs(title="Without warmup")
-# トレースプロット（バーンイン期間あり）
+# トレースプロット（バーンイン期間を含む）
 traceplot(mcmc_result, inc_warmup=T, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
   labs(title="Including warmup")
 ```
@@ -93,9 +93,9 @@ dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
 ```{r}
 library(bayesplot)
 # ヒストグラム描画
-mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "sigma"))
+mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma"))
 # カーネル密度推定
-mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma", "sigma"))
+mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma"))
 # 信用区間
 mcmc_intervals(
   mcmc_sample_raw, pars = c("Intercept", "b_species[1]", "b_species[2]", "sigma"),

@@ -24,7 +24,7 @@ model {
 
 // generated quantitiesブロック（事後予測分布を記述）
 generated quantities {
-  vector[N_pred] mu_pred; // 売上平均の事後分布
+  vector[N_pred] mu_pred; // 期待値muの事後分布
   vector[N_pred] petal_width_pred; // 応答変数の事後分布（事後予測分布）
   // 事後予測分布を得る
   for (i in 1:N_pred){

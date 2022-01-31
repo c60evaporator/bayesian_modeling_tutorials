@@ -21,7 +21,7 @@ rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
 options(mc.cores = parallel::detectCores())  # 計算並列化
 
 # 事後予測分布の横軸となる説明変数のベクトル
-petal_length_pred <- seq(1, 7, length = 13)
+PETAL_LENGTH_PRED <- seq(1, 7, length = 13)
 
 # list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
 N <- nrow(iris)  # データ数
@@ -29,8 +29,8 @@ data_list <- list(
   N = N,
   petal_width = iris$Petal.Width,
   petal_length = iris$Petal.Length,
-  N_pred = length(petal_length_pred),
-  petal_length_pred = petal_length_pred
+  N_pred = length(PETAL_LENGTH_PRED),
+  petal_length_pred = PETAL_LENGTH_PRED
   )
 data_list
 
@@ -89,13 +89,15 @@ mcmc_intervals(
 ```{r}
 # MCMCサンプル取得(`permuted=TRUE`を指定)
 mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+plotsmu <- list()
+plots
 # muの95%信用区間と99%信用区間を取得
 qua_mu <- apply(mcmc_sample$mu_pred,
                 2,
                 quantile,
                 probs=c(0.005, 0.025, 0.50, 0.975, 0.995))
 df_qua_mu <- data.frame(
-  petal_length=petal_length_pred,
+  petal_length=PETAL_LENGTH_PRED,
   t(qua_mu),
   check.names = FALSE
   )
@@ -118,7 +120,7 @@ qua_petal_width <- apply(mcmc_sample$petal_width_pred,
                          quantile,
                          probs=c(0.005, 0.025, 0.50, 0.975, 0.995))
 df_qua_petal_width <- data.frame(
-  petal_length=petal_length_pred,
+  petal_length=PETAL_LENGTH_PRED,
   t(qua_petal_width),
   check.names = FALSE
   )

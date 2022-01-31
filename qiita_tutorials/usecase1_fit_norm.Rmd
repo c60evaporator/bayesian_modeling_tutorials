@@ -40,7 +40,7 @@ mcmc_result <- stan(
   thin = 1          # 間引き数（1なら間引きなし）
 )
 ```
-2-2: モデルの概要確認
+2-2: MCMC結果の概要確認
 
 見方) 
 列:パラメータ事後分布（信用区間）関係の統計値
@@ -63,10 +63,10 @@ print(
 
 3-1: トレースプロットによる収束確認
 ```{r}
-# トレースプロット（バーンイン期間なし）
+# トレースプロット（バーンイン期間を含まない）
 traceplot(mcmc_result, pars = c("mu", "sigma", "lp__")) +
   labs(title="Without warmup")
-# トレースプロット（バーンイン期間あり）
+# トレースプロット（バーンイン期間を含む）
 traceplot(mcmc_result, inc_warmup=T, pars = c("mu", "sigma", "lp__")) +
   labs(title="Including warmup")
 ```

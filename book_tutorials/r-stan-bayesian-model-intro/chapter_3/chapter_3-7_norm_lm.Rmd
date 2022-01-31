@@ -289,7 +289,7 @@ for(i_cat in 1:n_weather){
     t(qua_mu),
     check.names = FALSE
   )
-  # lambdaの50%信用区間と95%信用区間をプロット
+  # muの50%信用区間と95%信用区間をプロット
   p_mu <- p_mu +
     geom_ribbon(data=df_qua_mu, aes(x=temperature, ymin=`2.5%`, ymax=`97.5%`),
                 fill=COLOR_LIST[i_cat], alpha=1/4) +
