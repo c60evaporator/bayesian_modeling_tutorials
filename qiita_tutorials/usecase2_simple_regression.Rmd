@@ -3,9 +3,14 @@
 手順1. 確率モデルの構築
 散布図描画
 ```{r}
+# データ読込（irisデータセットのpetal_lengthとpetal_width）
+df_iris <- data.frame(
+  petal_width = iris$Petal.Width,
+  petal_length = iris$Petal.Length
+)
 # 散布図描画
 library(ggplot2)
-ggplot(iris, aes(x = Petal.Length, y = Petal.Width)) +
+ggplot(df_iris, aes(x = petal_length, y = petal_width)) +
   geom_point() +
   labs(title ="petal_length and petal_width")
 ```
@@ -21,14 +26,14 @@ rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
 options(mc.cores = parallel::detectCores())  # 計算並列化
 
 # 事後予測分布の横軸となる説明変数のベクトル
-PETAL_LENGTH_PRED <- seq(1, 7, length = 13)
+PETAL_LENGTH_PRED <- seq(1, 7, by = 0.5)
 
 # list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
 N <- nrow(iris)  # データ数
 data_list <- list(
   N = N,
-  petal_width = iris$Petal.Width,
-  petal_length = iris$Petal.Length,
+  petal_width = df_iris$petal_width,
+  petal_length = df_iris$petal_length,
   N_pred = length(PETAL_LENGTH_PRED),
   petal_length_pred = PETAL_LENGTH_PRED
   )
@@ -45,7 +50,7 @@ mcmc_result <- stan(
   thin = 1          # 間引き数（1なら間引きなし）
 )
 ```
-2-2: モデルの概要確認
+2-2: MCMC結果の概要確認
 ```{r}
 options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
 print(
@@ -57,10 +62,10 @@ print(
 
 3-1: トレースプロットによる収束確認
 ```{r}
-# トレースプロット（バーンイン期間なし）
+# トレースプロット（バーンイン期間を含まない）
 traceplot(mcmc_result, pars = c("Intercept", "beta", "sigma", "lp__")) +
   labs(title="Without warmup")
-# トレースプロット（バーンイン期間あり）
+# トレースプロット（バーンイン期間を含む）
 traceplot(mcmc_result, inc_warmup=T, pars = c("Intercept", "beta", "sigma", "lp__")) +
   labs(title="Including warmup")
 ```
@@ -75,9 +80,9 @@ dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
 ```{r}
 library(bayesplot)
 # ヒストグラム描画
-mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "beta", "sigma", "sigma"))
+mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "beta", "sigma"))
 # カーネル密度推定
-mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "beta", "sigma", "sigma"))
+mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "beta", "sigma"))
 # 信用区間
 mcmc_intervals(
   mcmc_sample_raw, pars = c("Intercept", "beta", "sigma"),
@@ -85,12 +90,11 @@ mcmc_intervals(
   prob_outer = 0.99  # 細い線の範囲（99%信用区間）
 )
 ```
-3-3-2: muの信用区間を散布図上に表示
+3-3-2: 平均muの信用区間を散布図上に表示
 ```{r}
 # MCMCサンプル取得(`permuted=TRUE`を指定)
 mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
-plotsmu <- list()
-plots
+
 # muの95%信用区間と99%信用区間を取得
 qua_mu <- apply(mcmc_sample$mu_pred,
                 2,
@@ -109,12 +113,12 @@ ggplot() +
   geom_ribbon(data=df_qua_mu, aes(x=petal_length, ymin=`2.5%`, ymax=`97.5%`),
               fill='black', alpha=2/6) +
   geom_line(data=df_qua_mu, aes(x=petal_length, y=`50%`), size=1) +
-  geom_point(data=iris, aes(x=Petal.Length, y=Petal.Width)) +
-  labs(y='petal_width', title ='Credible interval')
+  geom_point(data=df_iris, aes(x=petal_length, y=petal_width)) +
+  labs(y='petal_width', title ='Credible interval of `mu`')
 ```
 3-4: 予測区間を散布図上に表示
 ```{r}
-# 50%予測区間と95%予測区間を取得
+# 95%予測区間と99%予測区間を取得
 qua_petal_width <- apply(mcmc_sample$petal_width_pred,
                          2,
                          quantile,
@@ -136,7 +140,7 @@ ggplot() +
               fill='black',
               alpha=2/6) +
   geom_line(data=df_qua_petal_width, aes(x=petal_length, y=`50%`), size=1) +
-  geom_point(data=iris, aes(x=Petal.Length, y=Petal.Width)) +
+  geom_point(data=df_iris, aes(x=petal_length, y=petal_width)) +
   labs(y='petal_width', title='Prediction interval')
 ```
 3-5: 異常検知
@@ -171,16 +175,16 @@ threshold <- apply(mcmc_petal_width,
 rownames(threshold) <- c("lower", "upper")
 # プロット用のDataFrame
 df_outlier <- data.frame(
-  iris,
+  df_iris,
   t(threshold)
 )
 # 予測区間の外側のデータ（異常値）を判定
 df_outlier <- data.frame(
   df_outlier,
-  outlier = df_outlier$Petal.Width < df_outlier$lower | df_outlier$Petal.Width > df_outlier$upper
+  outlier = df_outlier$petal_width < df_outlier$lower | df_outlier$petal_width > df_outlier$upper
 )
 
-# 事後予測分布と外れ値データをプロット
+# 予測区間と外れ値データをプロット
 ggplot() +  
   theme_bw(base_size=18) +
   geom_ribbon(data=df_qua_petal_width,
@@ -192,7 +196,7 @@ ggplot() +
               fill='black',
               alpha=2/6) +
   geom_line(data=df_qua_petal_width, aes(x=petal_length, y=`50%`), size=1) +
-  geom_point(data=df_outlier, aes(x=Petal.Length, y=Petal.Width, color=outlier), size=2) +
+  geom_point(data=df_outlier, aes(x=petal_length, y=petal_width, color=outlier), size=2) +
   scale_colour_manual(values = c("blue", "red")) +
   labs(y='petal_width', title='Anomaly detection')
 ```
