@@ -146,8 +146,51 @@ for(i_cat in 1:n_species){
 p_mu <- p_mu +
   geom_point(data=df_iris, aes(x=sepal_length, y=sepal_width, color=species)) +
   scale_color_manual(values=COLOR_LIST) +
-  labs(y='species', title ='Credible interval of `mu`')
+  labs(y='sepal_width', title ='Credible interval of `mu`')
 p_mu
+```
+3-3-3: 誤差計算と確率分布の妥当性確認
+```{r}
+# MAP推定用関数
+map <- function(z){
+  density(z)$x[which.max(density(z)$y)] 
+}
+
+# 平均muのMAP推定（予測値として使用）
+mu_map <- apply(mcmc_sample$mu, 2, map)
+# 誤差（実測値-予測値）
+noise_map <- df_iris$sepal_width - mu_map
+df_noise_map <- data.frame(noise_map=noise_map)
+
+# 標準偏差sigmaのMAP推定
+sigma_map <- map(mcmc_sample$sigma)
+
+# 誤差分布と標準偏差sigmaの正規分布との比較
+ggplot(data=df_noise_map, aes(x=noise_map)) +
+  theme_bw(base_size=18) +
+  geom_histogram(bins=20, aes(y=..density..),
+                 color='black', fill='white') +
+  geom_density(alpha=0.5, color='black', fill='gray50') +
+  stat_function(fun=function(x) dnorm(x, mean=0, sd=sigma_map),
+                linetype='dashed', color='red')
+```
+3-3-4: 予測値-実測値プロット
+```{r}
+# 予測値と実測値をDataFrameに格納
+df_pred_true <- data.frame(
+  pred=mu_map,  # 予測値(muのMAP推定値)
+  true=df_iris$sepal_width,  # 実測値(データの応答変数)
+  species=df_iris$species  # 色分け用(species)
+)
+# 予測値-実測値プロット
+axis_min <- min(min(df_pred_true$pred), min(df_pred_true$true))
+axis_max <- max(max(df_pred_true$pred), max(df_pred_true$true))
+ggplot(data=df_pred_true, aes(x=true, y=pred)) +
+  geom_point(aes(color=species)) +
+  geom_abline(aes(slope=1, intercept=0),
+              color='black', alpha=3/5, linetype='31') +
+  xlim(c(axis_min, axis_max)) +
+  ylim(c(axis_min, axis_max)) 
 ```
 3-4: 予測区間を散布図上に表示
 ```{r}

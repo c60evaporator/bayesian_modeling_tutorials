@@ -15,10 +15,15 @@ parameters {
   real<lower=0> sigma;//標準偏差
 }
 
+// transformed parametersブロック（中間パラメータの計算式を記述）
+transformed parameters {
+  //平均mu = Intercept + species*b_species
+  vector[N] mu = Intercept + species*b_species;
+}
+
 // modelブロック（モデル式を記述）
 model {
-  //平均Intercept + species*b_species、標準偏差sigmaの正規分布
-  vector[N] mu = Intercept + species*b_species;
+  //平均mu、標準偏差sigmaの正規分布
   sepal_width ~ normal(mu, sigma); //正規分布
 }
 

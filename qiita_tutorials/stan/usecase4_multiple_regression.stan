@@ -19,11 +19,15 @@ parameters {
   real<lower=0> sigma;//標準偏差
 }
 
+// transformed parametersブロック（中間パラメータの計算式を記述）
+transformed parameters {
+  //平均mu = Intercept + b_petal_length*petal_length + b_sepal_length*sepal_length
+  vector[N] mu = Intercept + b_petal_length*petal_length + b_sepal_length*sepal_length;
+}
+
 // modelブロック（モデル式を記述）
 model {
-  //平均intercept + b_petal_length*petal_length + b_sepal_length*sepal_length
   //標準偏差sigmaの正規分布
-  vector[N] mu = Intercept + b_petal_length*petal_length + b_sepal_length*sepal_length;
   petal_width ~ normal(mu, sigma);
 }
 

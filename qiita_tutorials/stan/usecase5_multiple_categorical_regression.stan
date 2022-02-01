@@ -19,12 +19,16 @@ parameters {
   real<lower=0> sigma;//標準偏差
 }
 
-// modelブロック（モデル式を記述）
-model {
-  //平均intercept + b_sepal_length*sepal_length + species*b_species
-  //標準偏差sigmaの正規分布
+// transformed parametersブロック（中間パラメータの計算式を記述）
+transformed parameters {
+  //平均mu = Intercept + b_sepal_length*sepal_length + species*b_species
   //※ speciesは行列なので、係数ベクトルの前に行列を掛ける必要がある
   vector[N] mu = Intercept + b_sepal_length*sepal_length + species*b_species;
+}
+
+// modelブロック（モデル式を記述）
+model {
+  //標準偏差sigmaの正規分布
   sepal_width ~ normal(mu, sigma);
 }
 

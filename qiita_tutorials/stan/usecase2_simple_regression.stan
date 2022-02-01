@@ -17,7 +17,7 @@ parameters {
 
 // transformed parametersブロック（中間パラメータの計算式を記述）
 transformed parameters {
-  //平均mu = intercept + beta*petal_length
+  //平均mu = Intercept + beta*petal_length
   vector[N] mu = Intercept + beta*petal_length;
 }
 
