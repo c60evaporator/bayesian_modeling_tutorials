@@ -116,24 +116,23 @@ ggplot() +
   geom_point(data=df_iris, aes(x=petal_length, y=petal_width)) +
   labs(y='petal_width', title ='Credible interval of `mu`')
 ```
-3-3-3: 誤差計算と分布形状の妥当性確認
+3-3-3: 誤差計算と確率分布の妥当性確認
 ```{r}
 # MAP推定用関数
 map <- function(z){
   density(z)$x[which.max(density(z)$y)] 
 }
 
-# 誤差のMCMCサンプル(応答変数の真値 - muの予測値)
-N_mcmc <- length(mcmc_sample$lp__)
-noise_mcmc <- t(replicate(N_mcmc, df_iris$petal_width)) - mcmc_sample$mu
-# 誤差のMCMCサンプルにMAP推定適用
-noise_map <- apply(noise_mcmc, 2, map)
+# 平均muのMAP推定（予測値として使用）
+mu_map <- apply(mcmc_sample$mu, 2, map)
+# 誤差（実測値-予測値）
+noise_map <- df_iris$petal_width - mu_map
 df_noise_map <- data.frame(noise_map=noise_map)
 
 # 標準偏差sigmaのMAP推定
 sigma_map <- map(mcmc_sample$sigma)
 
-# 誤差(MAP推定値)分布と標準偏差sigmaの正規分布との比較
+# 誤差分布と標準偏差sigmaの正規分布との比較
 ggplot(data=df_noise_map, aes(x=noise_map)) +
   theme_bw(base_size=18) +
   geom_histogram(bins=20, aes(y=..density..),
@@ -144,10 +143,16 @@ ggplot(data=df_noise_map, aes(x=noise_map)) +
 ```
 3-3-4: 予測値-実測値プロット
 ```{r}
-# 平均muのMAP推定（予測値として使用）
-mu_map <- apply(noise_mcmc, 2, map)
-
-
+# 予測値と実測値をDataFrameに格納
+df_pred_true <- data.frame(
+  pred=mu_map,  # 予測値(muのMAP推定値)
+  true=df_iris$petal_width  # 実測値(データの応答変数)
+)
+# 予測値-実測値プロット
+ggplot(data=df_pred_true, aes(x=true, y=pred)) +
+  geom_point() +
+  geom_abline(aes(slope=1, intercept=0),
+              color='black', alpha=3/5, linetype='31')
 ```
 
 3-4: 予測区間を散布図上に表示
