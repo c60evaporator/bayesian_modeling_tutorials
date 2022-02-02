@@ -1,4 +1,4 @@
-ユースケース3: 分散分析
+ユースケース4: 分散分析
 
 手順1. 確率モデルの構築
 散布図描画
@@ -54,7 +54,7 @@ data_list <- list(
 
 # MCMC実行
 mcmc_result <- stan(
-  file = "./stan/usecase3_categorical_regression.stan", # stanファイルのパス
+  file = "./stan/usecase4_categorical_regression.stan", # stanファイルのパス
   data = data_list, # 対象データ
   seed = 1,         # 乱数シード
   chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
@@ -219,7 +219,7 @@ data_list <- list(
 
 # MCMC実行
 mcmc_result <- stan(
-  file = "./stan/usecase3_categorical_mean_test.stan", # stanファイルのパス
+  file = "./stan/usecase4_categorical_mean_test.stan", # stanファイルのパス
   data = data_list, # 対象データ
   seed = 1,         # 乱数シード
   chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）

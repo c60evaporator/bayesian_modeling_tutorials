@@ -6,9 +6,9 @@ data {
   vector[N] sepal_length;//がくの長さ(説明変数2)
   
   int N_pred_1;  //予測の横軸要素数(説明変数1)
-  int N_pred_2;  //図プロット縦軸要素数(説明変数2)
+  int N_pred_2;  //縦に並べる図の数(説明変数2)
   vector[N_pred_1] petal_length_pred;  //予測の横軸となる説明変数1のベクトル
-  vector[N_pred_2] sepal_length_pred;  //図プロット縦軸となる説明変数2のベクトル
+  vector[N_pred_2] sepal_length_pred;  //各図で使用する説明変数2のベクトル
 }
 
 // parametersブロック（パラメータの定義）

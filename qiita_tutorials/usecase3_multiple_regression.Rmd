@@ -1,9 +1,9 @@
-ユースケース4: 重回帰
+ユースケース3: 重回帰
 
 手順1. 確率モデルの構築
 散布図描画
 ```{r}
-# データ読込（irisデータセットのsepal_widthとspecies）
+# データ読込（irisデータセットのpetal_width, petal_length, sepal_length）
 df_iris <- data.frame(
   petal_width = iris$Petal.Width,
   petal_length = iris$Petal.Length,
@@ -31,7 +31,6 @@ SEPAL_LENGTH_PRED <- seq(4, 8, by=SEPAL_LENGTH_BY)
 PETAL_LENGTH_BY = 0.5
 PETAL_LENGTH_PRED <- seq(1, 7, by=PETAL_LENGTH_BY)
 
-
 # list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
 N <- nrow(iris)  # データ数
 data_list <- list(
@@ -48,7 +47,7 @@ data_list
 
 # MCMC実行
 mcmc_result <- stan(
-  file = "./stan/usecase4_multiple_regression.stan", # stanファイルのパス
+  file = "./stan/usecase3_multiple_regression.stan", # stanファイルのパス
   data = data_list, # 対象データ
   seed = 1,         # 乱数シード
   chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
@@ -59,7 +58,7 @@ mcmc_result <- stan(
 ```
 2-2: MCMC結果の概要確認
 ```{r}
-options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
+options(max.print=4000) # printの表示上限を増やす(lp__が表示されるように)
 print(
   mcmc_result,                  # MCMCサンプルの結果
   probs = c(0.005, 0.025, 0.5, 0.975, 0.995)  # 中央値と95%, 99%信用区間を出力
