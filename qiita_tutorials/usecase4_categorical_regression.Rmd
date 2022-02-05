@@ -177,13 +177,13 @@ ggplot(data=df_pred_true, aes(x=true, y=pred)) +
   xlim(c(axis_min, axis_max)) +
   ylim(c(axis_min, axis_max)) 
 ```
-3-4: 予測区間を散布図上に表示
+3-4: 予測区間を表示
 ```{r}
 # 事後予測分布描画用ggplotオブジェクト
 p_pred <- ggplot() +
   theme_bw(base_size=18)
 
-# カテゴリ変数ごとにmuの事後分布を描画
+# カテゴリ変数ごとに事後予測分布を描画
 for(i_cat in 1:n_species){
   # muの95%信用区間と99%信用区間を取得
   df_mcmc_sepal_width <- data.frame(
@@ -196,6 +196,13 @@ for(i_cat in 1:n_species){
                  alpha=1/4, size=1.5)
 }
 p_pred + labs(title="Prediction interval")
+
+# カテゴリ変数ごとに予測区間を描画
+mcmc_intervals(
+  mcmc_sample_raw, regex_pars = "sepal_width_pred",
+  prob = 0.95,  # 太い線の範囲
+  prob_outer = 0.99  # 細い線の範囲
+)
 ```
 参考: 平均の差の検定
 ```{r}

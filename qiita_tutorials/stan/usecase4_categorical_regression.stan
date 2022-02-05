@@ -11,7 +11,7 @@ data {
 // parametersブロック（パラメータの定義）
 parameters {
   real Intercept;//切片
-  vector[N_cat-1] b_species;//品種ダミー変数の係数
+  vector[N_cat-1] b_species;//品種ダミー変数の係数ベクトル
   real<lower=0> sigma;//標準偏差
 }
 
