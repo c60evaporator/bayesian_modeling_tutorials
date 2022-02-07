@@ -16,14 +16,16 @@ parameters {
   real Intercept;//切片
   real b_sepal_length; //説明変数1の係数
   vector[N_cat_1-1] b_species; //説明変数2の係数(カテゴリ変数なので複数=ベクトルで保持)
+  vector[N_cat_1-1] b_inter;   //交互作用の係数
   real<lower=0> sigma;//標準偏差
 }
 
 // transformed parametersブロック（中間パラメータの計算式を記述）
 transformed parameters {
-  //平均mu = Intercept + b_sepal_length*sepal_length + species*b_species
+  //平均mu = Intercept + b_sepal_length*sepal_length + species*b_species + sepal_length .*(species*b_inter)
   //※ speciesは行列なので、係数ベクトルの前に行列を掛ける必要がある
-  vector[N] mu = Intercept + b_sepal_length*sepal_length + species*b_species;
+  //※ 交互作用の項ではベクトルの要素同士の積.*を使うので注意
+  vector[N] mu = Intercept + b_sepal_length*sepal_length + species*b_species + sepal_length .*(species*b_inter);
 }
 
 // modelブロック（モデル式を記述）
@@ -40,7 +42,7 @@ generated quantities {
   for (i_num_1 in 1:N_num_1){
     for (i_cat_1 in 1:N_cat_1){
       // muの事後分布
-      mu_pred[i_num_1][i_cat_1] = Intercept + b_sepal_length*sepal_length_pred[i_num_1] + species_pred[i_cat_1]*b_species;
+      mu_pred[i_num_1][i_cat_1] = Intercept + b_sepal_length*sepal_length_pred[i_num_1] + species_pred[i_cat_1]*b_species + sepal_length_pred[i_num_1] .*(species_pred[i_cat_1]*b_inter);
       // 事後予測分布
       sepal_width_pred[i_num_1][i_cat_1] = normal_rng(mu_pred[i_num_1][i_cat_1], sigma);
     }

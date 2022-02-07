@@ -1,4 +1,4 @@
-ユースケース5: カテゴリ変数を含む重回帰
+ユースケース6: 交互作用を持つ重回帰
 
 手順1. 確率モデルの構築
 散布図描画
@@ -60,7 +60,7 @@ data_list
 
 # MCMC実行
 mcmc_result <- stan(
-  file = "./stan/usecase5_multiple_categorical_regression.stan", # stanファイルのパス
+  file = "./stan/usecase6_multiple_regression_interactive.stan", # stanファイルのパス
   data = data_list, # 対象データ
   seed = 1,         # 乱数シード
   chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
@@ -82,10 +82,10 @@ print(
 3-1: トレースプロットによる収束確認
 ```{r}
 # トレースプロット（バーンイン期間を含まない）
-traceplot(mcmc_result, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
+traceplot(mcmc_result, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "b_inter[1]", "b_inter[2]", "sigma", "lp__")) +
   labs(title="Without warmup")
 # トレースプロット（バーンイン期間を含む）
-traceplot(mcmc_result, inc_warmup=T, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma", "lp__")) +
+traceplot(mcmc_result, inc_warmup=T, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "b_inter[1]", "b_inter[2]", "sigma", "lp__")) +
   labs(title="Including warmup")
 ```
 3-2: MCMCサンプルの抽出
@@ -99,12 +99,12 @@ dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
 ```{r}
 library(bayesplot)
 # ヒストグラム描画
-mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma"))
+mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "b_inter[1]", "b_inter[2]", "sigma"))
 # カーネル密度推定
-mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma"))
+mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "b_inter[1]", "b_inter[2]", "sigma"))
 # 信用区間
 mcmc_intervals(
-  mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "sigma"),
+  mcmc_sample_raw, pars = c("Intercept", "b_sepal_length", "b_species[1]", "b_species[2]", "b_inter[1]", "b_inter[2]", "sigma"),
   prob = 0.95,  # 太い線の範囲（95%信用区間）
   prob_outer = 0.99  # 細い線の範囲（99%信用区間）
 )
@@ -240,6 +240,7 @@ upper = 1 - lower  # 上限%
 mcmc_Intercept <- mcmc_sample$Intercept
 mcmc_b_sepal_length <- mcmc_sample$b_sepal_length
 mcmc_b_species <- mcmc_sample$b_species
+mcmc_b_inter <- mcmc_sample$b_inter
 mcmc_sigma <- mcmc_sample$sigma
 
 # 平均muと事後予測分布のMCMCサンプルを、データの説明変数ごとに作成
@@ -250,7 +251,8 @@ mcmc_sepal_width <- as.data.frame(matrix(nrow=N_mcmc, ncol=N))  # 予測分布MC
 for (i in 1:N){
   # 平均muのMCMCサンプル = 切片のMCMCサンプル + sepal_length係数のMCMCサンプル*sepal_length
   # + species係数のMCMCサンプル行列 %*% speciesのダミー変数ベクトル
-  mcmc_mu[,i] <- mcmc_Intercept + mcmc_b_sepal_length*df_iris$sepal_length[i] + (mcmc_b_species %*% species_dummy[i,])[,1]
+  # + sepal_length*交互作用係数のMCMCサンプル行列 %*% speciesのダミー変数ベクトル
+  mcmc_mu[,i] <- mcmc_Intercept + mcmc_b_sepal_length*df_iris$sepal_length[i] + (mcmc_b_species %*% species_dummy[i,])[,1] + df_iris$sepal_length[i]*(mcmc_b_inter %*% species_dummy[i,])[,1]
   # 事後予測分布のMCMCサンプルを正規分布乱数から生成
   mcmc_sepal_width[,i] <- rnorm(n=N_mcmc, mean=mcmc_mu[,i], sd=mcmc_sigma)
 }

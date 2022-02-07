@@ -206,6 +206,10 @@ mcmc_intervals(
 ```
 参考: 平均の差の検定
 ```{r}
+# パッケージ読込
+library(rstan)
+library(bayesplot)
+
 # 品種ごとにデータを分ける
 df_setosa <- df_iris[df_iris$species == "setosa",]
 df_versicolor <- df_iris[df_iris$species == "versicolor",]

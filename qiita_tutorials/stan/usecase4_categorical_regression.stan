@@ -5,7 +5,7 @@ data {
   vector[N] sepal_width;//花弁の幅(応答変数)
   matrix[N, N_cat-1] species;//説明変数(品種ダミー変数)
   
-  matrix[N_cat, N_cat-1] species_pred;  //予測の横軸となるカテゴリ説明変数の行列
+  matrix[N_cat, N_cat-1] species_pred;  //予測時の色分けに使用するカテゴリ説明変数の行列
 }
 
 // parametersブロック（パラメータの定義）
