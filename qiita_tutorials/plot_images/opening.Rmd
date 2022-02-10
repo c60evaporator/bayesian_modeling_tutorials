@@ -1,0 +1,138 @@
+2-1: MCMC実行
+```{r}
+# パッケージ読込
+library(rstan)
+
+# 計算高速化
+rstan_options(auto_write=TRUE)  # コンパイルファイルの保存
+options(mc.cores = parallel::detectCores())  # 計算並列化
+
+x <- c(3,4,5,5,6,6,6,7,7,8,9)
+y <- rnorm(length(x), mean=x)
+ggplot() +
+  geom_point(aes(x = x, y = y))
+x_pred <- seq(0, 15, by=0.2)
+
+# list形式にデータをまとめる（stanファイルのdataブロックと名称を揃える）
+data_list <- list(
+  N = length(x),
+  x = x,
+  y = y,
+  N_pred = length(x_pred),
+  x_pred = x_pred
+  )
+data_list
+
+# MCMC実行
+mcmc_result <- stan(
+  file = "./opening.stan", # stanファイルのパス
+  data = data_list, # 対象データ
+  seed = 1,         # 乱数シード
+  chains = 4,       # 初期値の個数（全初期値で近い結果となれば収束と判断）
+  iter = 2000,      # サンプリングの繰り返し数
+  warmup = 1000,    # バーンイン期間（収束前と見なして捨てるサンプル数）
+  thin = 1          # 間引き数（1なら間引きなし）
+)
+```
+MCMC結果の概要確認
+```{r}
+options(max.print=2000) # printの表示上限を増やす(lp__が表示されるように)
+print(
+  mcmc_result,                  # MCMCサンプルの結果
+  probs = c(0.005, 0.025, 0.5, 0.975, 0.995)  # 中央値と95%, 99%信用区間を出力
+)
+```
+bayesplotによる事後分布（信用区間）の可視化
+```{r}
+# MCMCサンプルの抽出(`permuted=FALSE`でMCMCサンプルの並び順保持)
+mcmc_sample_raw <- rstan::extract(mcmc_result, permuted = FALSE)
+dim(mcmc_sample_raw)  # MCMCサンプルの要素数（iter-warmup × chains x パラメータ数）
+dimnames(mcmc_sample_raw)  # 各々の名称（iterations, chains, parameters）
+
+library(bayesplot)
+# ヒストグラム描画
+mcmc_hist(mcmc_sample_raw, pars = c("Intercept", "beta", "sigma"))
+# カーネル密度推定
+mcmc_dens(mcmc_sample_raw, pars = c("Intercept", "beta", "sigma"))
+# 信用区間
+mcmc_intervals(
+  mcmc_sample_raw, pars = c("Intercept", "beta", "sigma"),
+  prob = 0.95,  # 太い線の範囲（95%信用区間）
+  prob_outer = 0.99  # 細い線の範囲（99%信用区間）
+)
+```
+平均muの信用区間を散布図上に表示
+```{r}
+# MCMCサンプル取得(`permuted=TRUE`を指定)
+mcmc_sample <- rstan::extract(mcmc_result, permuted = TRUE)
+
+# muの95%信用区間と99%信用区間を取得
+qua_mu <- apply(mcmc_sample$mu_pred,
+                2,
+                quantile,
+                probs=c(0.005, 0.025, 0.50, 0.975, 0.995))
+df_qua_mu <- data.frame(
+  x_pred=x_pred,
+  t(qua_mu),
+  check.names = FALSE
+  )
+# muの95%信用区間と99%信用区間をプロット
+ggplot() +
+  theme_bw(base_size=18) +
+  geom_ribbon(data=df_qua_mu, aes(x=x_pred, ymin=`0.5%`, ymax=`99.5%`),
+              fill='black', alpha=1/6) +
+  geom_ribbon(data=df_qua_mu, aes(x=x_pred, ymin=`2.5%`, ymax=`97.5%`),
+              fill='black', alpha=2/6) +
+  geom_line(data=df_qua_mu, aes(x=x_pred, y=`50%`), size=1) +
+  geom_point(aes(x=x, y=y)) +
+  labs(y='y', title ='Credible interval of `mu`')
+```
+予測区間を散布図上に表示
+```{r}
+# 95%予測区間と99%予測区間を取得
+qua_pred <- apply(mcmc_sample$y_pred,
+                         2,
+                         quantile,
+                         probs=c(0.005, 0.025, 0.50, 0.975, 0.995))
+df_qua_pred <- data.frame(
+  x_pred=x_pred,
+  t(qua_pred),
+  check.names = FALSE
+  )
+# 95%予測区間と99%予測区間をプロット
+ggplot() +  
+  theme_bw(base_size=18) +
+  geom_ribbon(data=df_qua_pred,
+              aes(x=x_pred, ymin=`2.5%`, ymax=`97.5%`),
+              fill='black',
+              alpha=1/4) +
+  geom_line(data=df_qua_pred, aes(x=x_pred, y=`50%`), size=1) +
+  geom_point(aes(x=x, y=y)) +
+  labs(y='y', title='Prediction interval')
+```
+
+
+2次元正規分布を描画
+```{r}
+library(ggplot2)
+library(mvtnorm)
+sigma = matrix(c(3, 1, 1, 2), ncol = 2)
+rand = rmvnorm(n = 1000, mean = c(0, 0), sigma)
+x1 = rand[, 1]
+x2 = rand[, 2]
+df <- data.frame(x1 = x1, x2 = x2)
+p <- ggplot(df, aes(x1, x2)) + geom_point() + theme_classic()
+ggExtra::ggMarginal(p, type = "histogram")
+```
+
+```{r}
+x1 = seq(-3, 3, length = 50)
+x2 = x1
+f = function(x1, x2) {
+  dmvnorm(matrix(c(x1, x2), ncol = 2), mean = c(0, 0), sigma = sigma)
+}
+p = outer(x1, x2, f)
+p[is.na(p)] = 1
+op = par(bg = "white")
+persp(x1, x2, p, theta = 30, phi = 30, expand = 0.5, col = "orange")  
+```

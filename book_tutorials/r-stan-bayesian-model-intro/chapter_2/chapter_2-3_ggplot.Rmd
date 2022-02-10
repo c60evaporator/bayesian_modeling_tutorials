@@ -4,7 +4,7 @@ Chapter2-3 ggplot2によるデータの可視化
 ```{r}
 # サンプルデータ読込
 library(ggplot2)
-INPUT_PATH <- "../../../sample_data/california_housing.csv"
+INPUT_PATH <- "./sample_data/california_housing.csv"
 df <- read.csv(INPUT_PATH, fileEncoding = "UTF-8-BOM")
 # ヒストグラム描画
 ggplot(data=df, mapping=aes(x=price)) +

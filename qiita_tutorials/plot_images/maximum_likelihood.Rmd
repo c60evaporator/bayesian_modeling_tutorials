@@ -1,0 +1,32 @@
+t検定
+```{r}
+library(ggplot2)
+MU <- 0  # 検定対象の母平均
+BAR_X <- 1  # 標本平均
+S <- 1  # 標本標準偏差
+
+# サンプル数5のとき
+N_1 <- 5  # サンプル数
+t_1 <- (BAR_X-MU)*sqrt(N_1)/S # 検定統計量t
+p_1 <- 2 * pt(t_1, N_1-1, lower=F)  # 両側検定のp値
+ggplot(data=data.frame(X=c(-8,8)), aes(x=X)) +
+  stat_function(fun=dt, args=list(df=N_1), color="blue") +
+  geom_vline(xintercept = t_1) +
+  labs(x='t', y='', title=paste('N=', N_1,', p_value=', p_1))
+
+# サンプル数50のとき
+N_2 <- 50
+t_2 <- (BAR_X-MU)*sqrt(N_2)/S # 検定統計量t
+p_2 <- 2 * pt(t_2, N_2-1, lower=F)  # 両側検定のp値
+ggplot(data=data.frame(X=c(-8,8)), aes(x=X)) +
+  stat_function(fun=dt, args=list(df=N_2), color="red") +
+  geom_vline(xintercept = t_2) +
+  labs(x='t', y='', title=paste('N=', N_2,', p_value=', p_2))
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
