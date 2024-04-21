@@ -82,11 +82,11 @@ x2_borders = [X2_CENTER - X2_BY * (N_IMAGES/2 - 1) + X2_BY * i for i in range(N_
 fig_cred, axes_cred = plt.subplots(nrows=1, ncols=N_IMAGES, figsize=(N_IMAGES * 4, 4))
 fig_pred, axes_pred = plt.subplots(nrows=1, ncols=N_IMAGES, figsize=(N_IMAGES * 4, 4))
 
-for i in range(N_IMAGES):
+for img_idx in range(N_IMAGES):
     # Minimum, Maximum, Representative value of x2 in the image
-    x2_min = -sys.float_info.max if i == 0 else x2_borders[i - 1]
-    x2_max = sys.float_info.max if i == len(x2_borders) else x2_borders[i]
-    x2_rep = x2_borders[0] - X2_BY / 2 if i == 0 else x2_borders[i - 1] + X2_BY / 2
+    x2_min = -sys.float_info.max if img_idx == 0 else x2_borders[img_idx - 1]
+    x2_max = sys.float_info.max if img_idx == len(x2_borders) else x2_borders[img_idx]
+    x2_rep = x2_borders[0] - X2_BY / 2 if img_idx == 0 else x2_borders[img_idx - 1] + X2_BY / 2
     # Extract the obserbed data whose x2 value is in the range of the image
     x2_mask = np.where((x2_min < X[:, 1]) & (X[:, 1] < x2_max))
     X_filtered = X[x2_mask]
@@ -102,14 +102,14 @@ for i in range(N_IMAGES):
     mu_posterior = idata.posterior["alpha"] * xr.DataArray(X_grid[:, 0], dims=["x1"]) \
         + xr.dot(idata.posterior["beta"], X_grid_xr, dim=["beta_dim_0"])
     # Plot the credible interval of mu
-    x2_min_label = '' if i == 0 else str(round(x2_min, 4))
-    x2_max_label = '' if i == len(x2_borders) else str(round(x2_max, 4))
-    az.plot_hdi(x1_grid, mu_posterior, hdi_prob=0.95, ax=axes_cred[i])
-    axes_cred[i].plot(x1_grid, np.mean(mu_posterior.to_numpy(), axis=(0, 1)), color='red')
-    sns.scatterplot(x=X_filtered[:, 0], y=Y_filtered, ax=axes_cred[i])
-    axes_cred[i].set_xlabel('x1')
-    axes_cred[i].set_xlabel('y')
-    axes_cred[i].set_title(f'x2={x2_min_label}-{x2_max_label}')
+    x2_min_label = '' if img_idx == 0 else str(round(x2_min, 4))
+    x2_max_label = '' if img_idx == len(x2_borders) else str(round(x2_max, 4))
+    az.plot_hdi(x1_grid, mu_posterior, hdi_prob=0.95, ax=axes_cred[img_idx])
+    axes_cred[img_idx].plot(x1_grid, np.mean(mu_posterior.to_numpy(), axis=(0, 1)), color='red')
+    sns.scatterplot(x=X_filtered[:, 0], y=Y_filtered, ax=axes_cred[img_idx])
+    axes_cred[img_idx].set_xlabel('x1')
+    axes_cred[img_idx].set_xlabel('y')
+    axes_cred[img_idx].set_title(f'x2={x2_min_label}-{x2_max_label}')
     # Calculate posterior predictive distribution (shape=(chain, n_samples, n_x1))
     sigma_posterior = idata.posterior["sigma"].to_numpy()
     posterior_predictive = []
@@ -122,12 +122,12 @@ for i in range(N_IMAGES):
         ))
     posterior_predictive = np.array(posterior_predictive).transpose(1, 2, 0)
     # Plot the prediction interval
-    az.plot_hdi(x1_grid, posterior_predictive, hdi_prob=0.95, ax=axes_pred[i])
-    axes_pred[i].plot(x1_grid, np.mean(posterior_predictive, axis=(0, 1)), color='red')
-    sns.scatterplot(x=X_filtered[:, 0], y=Y_filtered, ax=axes_pred[i])
-    axes_pred[i].set_xlabel('x1')
-    axes_pred[i].set_xlabel('y')
-    axes_pred[i].set_title(f'x2={x2_min_label}-{x2_max_label}')
+    az.plot_hdi(x1_grid, posterior_predictive, hdi_prob=0.95, ax=axes_pred[img_idx])
+    axes_pred[img_idx].plot(x1_grid, np.mean(posterior_predictive, axis=(0, 1)), color='red')
+    sns.scatterplot(x=X_filtered[:, 0], y=Y_filtered, ax=axes_pred[img_idx])
+    axes_pred[img_idx].set_xlabel('x1')
+    axes_pred[img_idx].set_xlabel('y')
+    axes_pred[img_idx].set_title(f'x2={x2_min_label}-{x2_max_label}')
     # Create (x1,y) grid for plotting image
     # y_min, y_max = np.min(Y), np.max(Y)
     # y_grid = np.linspace(y_min, y_max, num=100)
